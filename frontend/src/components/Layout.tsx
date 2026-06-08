@@ -4,7 +4,6 @@ import { Layout as AntLayout, Menu, Button, Avatar, Dropdown } from 'antd'
 import {
   CarOutlined,
   HomeOutlined,
-  UnorderedListOutlined,
   EnvironmentOutlined,
   UserOutlined,
   LogoutOutlined,

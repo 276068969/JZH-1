@@ -1,6 +1,7 @@
 # ============================================================
 # 后端构建阶段 - 使用 Maven 多阶段构建
 # ============================================================
+ARG DOCKER_REGISTRY=docker.io/library
 FROM ${DOCKER_REGISTRY}/maven:3.8.6-openjdk-17 AS builder
 
 # 设置 Maven 镜像源

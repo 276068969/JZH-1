@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { Card, Row, Col, Select, Input, Button, Tag } from 'antd'
 import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons'
 import L from 'leaflet'

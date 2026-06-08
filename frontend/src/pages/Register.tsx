@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Form, Input, Button, Card, message, Radio } from 'antd'
+import { Form, Input, Button, message, Radio } from 'antd'
 import { UserOutlined, LockOutlined, PhoneOutlined, MailOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
