@@ -37,7 +37,21 @@ const MapView: React.FC = () => {
   const loadVehicles = async () => {
     try {
       const response = await axios.get('/api/vehicles/locations')
-      setVehicles(response.data)
+      const data = response.data?.data || response.data
+      if (Array.isArray(data) && data.length > 0) {
+        const vehicles = data.map((v: any) => ({
+          id: v.id,
+          name: v.name,
+          lat: v.latitude || v.lat,
+          lng: v.longitude || v.lng,
+          type: v.type,
+          available: v.available,
+          price: v.price
+        }))
+        setVehicles(vehicles)
+      } else {
+        throw new Error('No data')
+      }
     } catch (error) {
       setVehicles([
         { id: 1, name: '特斯拉 Model 3', lat: 39.9042, lng: 116.4074, type: '电动车', available: true, price: 299 },

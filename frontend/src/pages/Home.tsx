@@ -34,7 +34,12 @@ const Home: React.FC = () => {
   const loadVehicles = async () => {
     try {
       const response = await axios.get('/api/vehicles')
-      setVehicles(response.data)
+      const data = response.data?.data || response.data
+      if (Array.isArray(data) && data.length > 0) {
+        setVehicles(data)
+      } else {
+        throw new Error('No data')
+      }
     } catch (error) {
       setVehicles([
         { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', available: true, rating: 4.8 },
