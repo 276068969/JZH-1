@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Card, Button, Row, Col, Rate, Tag, Empty, Spin, message, Badge } from 'antd'
+import { Card, Button, Row, Col, Rate, Tag, Empty, Spin, Badge } from 'antd'
 import {
   ArrowLeftOutlined,
   DeleteOutlined,
@@ -273,7 +273,7 @@ const VehicleCompare: React.FC = () => {
                 }}>
                   对比项
                 </th>
-                {vehicles.map((vehicle, idx) => (
+                {vehicles.map((vehicle) => (
                   <th
                     key={vehicle.id}
                     style={{
