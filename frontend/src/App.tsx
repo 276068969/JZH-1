@@ -6,6 +6,7 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import VehicleList from './pages/VehicleList'
 import VehicleDetail from './pages/VehicleDetail'
+import VehicleCompare from './pages/VehicleCompare'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Orders from './pages/Orders'
@@ -30,6 +31,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/vehicles" element={<VehicleList />} />
             <Route path="/vehicles/:id" element={<VehicleDetail />} />
+            <Route path="/compare" element={<VehicleCompare />} />
             <Route path="/map" element={<MapView />} />
             <Route path="/login" element={<Login onLogin={handleLogin} />} />
             <Route path="/register" element={<Register />} />

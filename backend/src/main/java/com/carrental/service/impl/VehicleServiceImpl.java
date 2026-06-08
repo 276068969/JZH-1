@@ -95,11 +95,27 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         return Arrays.asList(v1, v2, v3);
     }
 
+    @Override
+    public List<Vehicle> getVehiclesByIds(List<Long> ids) {
+        List<Vehicle> vehicles = this.listByIds(ids);
+        if (vehicles.isEmpty()) {
+            return getMockVehiclesByIds(ids);
+        }
+        return vehicles;
+    }
+
     private Vehicle getMockVehicleById(Long id) {
         List<Vehicle> mockVehicles = getMockVehicles();
         return mockVehicles.stream()
                 .filter(v -> v.getId().equals(id))
                 .findFirst()
                 .orElse(mockVehicles.get(0));
+    }
+
+    private List<Vehicle> getMockVehiclesByIds(List<Long> ids) {
+        List<Vehicle> allMock = getMockVehicles();
+        return allMock.stream()
+                .filter(v -> ids.contains(v.getId()))
+                .collect(java.util.stream.Collectors.toList());
     }
 }

@@ -7,7 +7,8 @@ import {
   EnvironmentOutlined,
   UserOutlined,
   LogoutOutlined,
-  ShoppingCartOutlined
+  ShoppingCartOutlined,
+  SwapOutlined
 } from '@ant-design/icons'
 
 const { Header, Content, Footer } = AntLayout
@@ -24,6 +25,7 @@ const Layout: React.FC<LayoutProps> = ({ children, isAuthenticated, onLogout }) 
   const items = [
     { key: '/', icon: <HomeOutlined />, label: <Link to="/">首页</Link> },
     { key: '/vehicles', icon: <CarOutlined />, label: <Link to="/vehicles">车辆列表</Link> },
+    { key: '/compare', icon: <SwapOutlined />, label: <Link to="/compare">对比中心</Link> },
     { key: '/map', icon: <EnvironmentOutlined />, label: <Link to="/map">地图视图</Link> },
   ]
 

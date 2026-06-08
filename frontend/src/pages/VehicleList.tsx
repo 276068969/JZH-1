@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { Input, Select, Row, Col, Rate, Tag } from 'antd'
-import { SearchOutlined, EnvironmentOutlined } from '@ant-design/icons'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message } from 'antd'
+import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
 const { Search } = Input
@@ -23,12 +23,14 @@ const extractCity = (location: string): string => {
 }
 
 const VehicleList: React.FC = () => {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([])
   const [searchText, setSearchText] = useState(searchParams.get('search') || '')
   const [typeFilter, setTypeFilter] = useState<string>(searchParams.get('type') || 'all')
   const [cityFilter, setCityFilter] = useState<string>(searchParams.get('city') || 'all')
+  const [compareIds, setCompareIds] = useState<number[]>([])
 
   useEffect(() => {
     const search = searchParams.get('search') || ''
@@ -132,6 +134,38 @@ const VehicleList: React.FC = () => {
     setSearchParams({})
   }
 
+  const toggleCompare = (id: number) => {
+    if (compareIds.includes(id)) {
+      setCompareIds(compareIds.filter(vid => vid !== id))
+    } else {
+      if (compareIds.length >= 3) {
+        message.warning('最多只能选择3辆车进行对比')
+        return
+      }
+      setCompareIds([...compareIds, id])
+    }
+  }
+
+  const removeFromCompare = (id: number) => {
+    setCompareIds(compareIds.filter(vid => vid !== id))
+  }
+
+  const clearCompare = () => {
+    setCompareIds([])
+  }
+
+  const goToCompare = () => {
+    if (compareIds.length < 2) {
+      message.warning('请至少选择2辆车进行对比')
+      return
+    }
+    navigate(`/compare?ids=${compareIds.join(',')}`)
+  }
+
+  const selectedVehicles = useMemo(() => {
+    return vehicles.filter(v => compareIds.includes(v.id))
+  }, [vehicles, compareIds])
+
   return (
     <div>
       <div style={{
@@ -222,8 +256,28 @@ const VehicleList: React.FC = () => {
         <Row gutter={[24, 24]}>
           {filteredVehicles.map(vehicle => (
             <Col xs={24} sm={12} lg={8} key={vehicle.id}>
-              <Link to={`/vehicles/${vehicle.id}`} style={{ textDecoration: 'none' }}>
-                <div className="vehicle-card" style={{ height: '100%' }}>
+              <div className="vehicle-card" style={{
+                height: '100%',
+                position: 'relative',
+                border: compareIds.includes(vehicle.id) ? '2px solid #667eea' : '1px solid #f0f0f0',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                background: 'white',
+                transition: 'all 0.3s'
+              }}>
+                <div style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 10 }}>
+                  <Checkbox
+                    checked={compareIds.includes(vehicle.id)}
+                    onChange={() => toggleCompare(vehicle.id)}
+                    style={{
+                      background: 'white',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                    }}
+                  />
+                </div>
+                <Link to={`/vehicles/${vehicle.id}`} style={{ textDecoration: 'none', display: 'block' }}>
                   <div className="vehicle-image" style={{ height: '180px' }}>🚗</div>
                   <div className="vehicle-info">
                     <h3 style={{ fontSize: '1.125rem', marginBottom: '8px' }}>{vehicle.name}</h3>
@@ -256,8 +310,8 @@ const VehicleList: React.FC = () => {
                       <span style={{ marginLeft: '8px', color: '#666' }}>{vehicle.rating}</span>
                     </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             </Col>
           ))}
         </Row>
@@ -270,6 +324,66 @@ const VehicleList: React.FC = () => {
           </div>
         )}
       </div>
+
+      {compareIds.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1000,
+          background: 'white',
+          padding: '16px 24px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          maxWidth: '90%'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <SwapOutlined style={{ color: '#667eea', fontSize: '1.25rem' }} />
+            <span style={{ fontWeight: '500' }}>已选 {compareIds.length} 辆车</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flex: 1, overflow: 'auto' }}>
+            {selectedVehicles.map(v => (
+              <Tag
+                key={v.id}
+                closable
+                onClose={() => removeFromCompare(v.id)}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: '0.875rem',
+                  background: '#f0f5ff',
+                  borderColor: '#667eea',
+                  color: '#667eea'
+                }}
+              >
+                {v.name}
+              </Tag>
+            ))}
+          </div>
+          <Button
+            type="text"
+            size="small"
+            onClick={clearCompare}
+            icon={<CloseOutlined />}
+          >
+            清空
+          </Button>
+          <Button
+            type="primary"
+            onClick={goToCompare}
+            disabled={compareIds.length < 2}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: 'none'
+            }}
+          >
+            开始对比
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -304,6 +304,37 @@ const Home: React.FC = () => {
           ))}
         </Row>
       </div>
+
+      <div style={{
+        marginTop: '40px',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: '16px',
+        padding: '48px 32px',
+        color: 'white',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚖️</div>
+        <h2 style={{ fontSize: '2rem', marginBottom: '12px', color: 'white' }}>车辆对比中心</h2>
+        <p style={{ fontSize: '1.125rem', opacity: 0.9, marginBottom: '24px' }}>
+          最多对比3辆车，价格、配置、评分一目了然，帮您快速做出最佳选择
+        </p>
+        <Button
+          type="primary"
+          size="large"
+          onClick={() => navigate('/compare')}
+          style={{
+            height: '48px',
+            padding: '0 40px',
+            fontSize: '1.125rem',
+            background: 'white',
+            color: '#667eea',
+            border: 'none',
+            fontWeight: '600'
+          }}
+        >
+          立即对比
+        </Button>
+      </div>
     </div>
   )
 }

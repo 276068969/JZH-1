@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Button, Row, Col, DatePicker, message, Descriptions, Rate, Tabs } from 'antd'
-import { EnvironmentOutlined, UserOutlined, CarOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { Card, Button, Row, Col, DatePicker, message, Descriptions, Rate, Tabs, Tag } from 'antd'
+import { EnvironmentOutlined, UserOutlined, CarOutlined, CheckCircleOutlined, SwapOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
 
@@ -31,6 +31,47 @@ const VehicleDetail: React.FC = () => {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
   const [dates, setDates] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [loading, setLoading] = useState(false)
+  const [compareList, setCompareList] = useState<number[]>([])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('compareList')
+    if (saved) {
+      try {
+        setCompareList(JSON.parse(saved))
+      } catch (e) {
+        setCompareList([])
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('compareList', JSON.stringify(compareList))
+  }, [compareList])
+
+  const isInCompare = compareList.includes(Number(id))
+
+  const toggleCompare = () => {
+    const vid = Number(id)
+    if (isInCompare) {
+      setCompareList(compareList.filter(v => v !== vid))
+      message.success('已从对比列表移除')
+    } else {
+      if (compareList.length >= 3) {
+        message.warning('最多只能对比3辆车')
+        return
+      }
+      setCompareList([...compareList, vid])
+      message.success('已加入对比')
+    }
+  }
+
+  const goToCompare = () => {
+    if (compareList.length < 2) {
+      message.warning('请至少选择2辆车进行对比')
+      return
+    }
+    navigate(`/compare?ids=${compareList.join(',')}`)
+  }
 
   useEffect(() => {
     loadVehicle()
@@ -228,11 +269,55 @@ const VehicleDetail: React.FC = () => {
                   height: '48px',
                   fontSize: '1.125rem',
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  border: 'none'
+                  border: 'none',
+                  marginBottom: '12px'
                 }}
               >
                 {vehicle.available ? '立即租车' : '暂不可租'}
               </Button>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button
+                  icon={<SwapOutlined />}
+                  onClick={toggleCompare}
+                  style={{
+                    flex: 1,
+                    borderColor: isInCompare ? '#667eea' : undefined,
+                    color: isInCompare ? '#667eea' : undefined
+                  }}
+                >
+                  {isInCompare ? '已加入对比' : '加入对比'}
+                </Button>
+                {compareList.length >= 2 && (
+                  <Button
+                    type="primary"
+                    ghost
+                    onClick={goToCompare}
+                  >
+                    查看对比
+                  </Button>
+                )}
+              </div>
+
+              {compareList.length > 0 && (
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
+                  <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '8px' }}>
+                    对比列表 ({compareList.length}/3)
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {compareList.map(vid => (
+                      <Tag
+                        key={vid}
+                        color={vid === Number(id) ? 'blue' : 'default'}
+                        closable={vid !== Number(id)}
+                        onClose={() => setCompareList(compareList.filter(v => v !== vid))}
+                      >
+                        车辆 #{vid}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
           </Col>
         </Row>
