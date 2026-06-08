@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { Input, Select, Row, Col, Rate } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Input, Select, Row, Col, Rate, Tag } from 'antd'
+import { SearchOutlined, EnvironmentOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
 const { Search } = Input
@@ -17,11 +17,27 @@ interface Vehicle {
   description: string
 }
 
+const extractCity = (location: string): string => {
+  const match = location.match(/^(.+?)[市区]/)
+  return match ? match[1] : location
+}
+
 const VehicleList: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([])
-  const [searchText, setSearchText] = useState('')
-  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [searchText, setSearchText] = useState(searchParams.get('search') || '')
+  const [typeFilter, setTypeFilter] = useState<string>(searchParams.get('type') || 'all')
+  const [cityFilter, setCityFilter] = useState<string>(searchParams.get('city') || 'all')
+
+  useEffect(() => {
+    const search = searchParams.get('search') || ''
+    const type = searchParams.get('type') || 'all'
+    const city = searchParams.get('city') || 'all'
+    setSearchText(search)
+    setTypeFilter(type)
+    setCityFilter(city)
+  }, [searchParams])
 
   useEffect(() => {
     loadVehicles()
@@ -29,7 +45,7 @@ const VehicleList: React.FC = () => {
 
   useEffect(() => {
     filterVehicles()
-  }, [searchText, typeFilter, vehicles])
+  }, [searchText, typeFilter, cityFilter, vehicles])
 
   const loadVehicles = async () => {
     try {
@@ -56,7 +72,8 @@ const VehicleList: React.FC = () => {
     if (searchText) {
       filtered = filtered.filter(v =>
         v.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        v.description.toLowerCase().includes(searchText.toLowerCase())
+        v.description.toLowerCase().includes(searchText.toLowerCase()) ||
+        v.type.toLowerCase().includes(searchText.toLowerCase())
       )
     }
 
@@ -64,10 +81,56 @@ const VehicleList: React.FC = () => {
       filtered = filtered.filter(v => v.type === typeFilter)
     }
 
+    if (cityFilter !== 'all') {
+      filtered = filtered.filter(v => extractCity(v.location) === cityFilter)
+    }
+
     setFilteredVehicles(filtered)
   }
 
-  const vehicleTypes = ['all', ...new Set(vehicles.map(v => v.type))]
+  const vehicleTypes = useMemo(() => {
+    const types = ['all', ...new Set(vehicles.map(v => v.type))]
+    return types
+  }, [vehicles])
+
+  const cities = useMemo(() => {
+    const citySet = new Set(vehicles.map(v => extractCity(v.location)))
+    return ['all', ...Array.from(citySet)]
+  }, [vehicles])
+
+  const updateFilters = (key: string, value: string) => {
+    const params = new URLSearchParams(searchParams)
+    if (value && value !== 'all') {
+      params.set(key, value)
+    } else {
+      params.delete(key)
+    }
+    setSearchParams(params)
+  }
+
+  const handleSearch = (value: string) => {
+    setSearchText(value)
+    updateFilters('search', value)
+  }
+
+  const handleTypeChange = (value: string) => {
+    setTypeFilter(value)
+    updateFilters('type', value)
+  }
+
+  const handleCityChange = (value: string) => {
+    setCityFilter(value)
+    updateFilters('city', value)
+  }
+
+  const hasActiveFilters = searchText || typeFilter !== 'all' || cityFilter !== 'all'
+
+  const clearAllFilters = () => {
+    setSearchText('')
+    setTypeFilter('all')
+    setCityFilter('all')
+    setSearchParams({})
+  }
 
   return (
     <div>
@@ -79,23 +142,42 @@ const VehicleList: React.FC = () => {
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
       }}>
         <Row gutter={[16, 16]} align="middle">
-          <Col xs={24} md={12}>
+          <Col xs={24} md={10}>
             <Search
-              placeholder="搜索车辆名称..."
+              placeholder="搜索车辆名称、类型或描述..."
               allowClear
               enterButton={<span><SearchOutlined /> 搜索</span>}
               size="large"
-              onSearch={setSearchText}
+              value={searchText}
+              onSearch={handleSearch}
               onChange={(e) => setSearchText(e.target.value)}
             />
           </Col>
-          <Col xs={24} md={12}>
+          <Col xs={24} md={7}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>筛选类型：</span>
+              <EnvironmentOutlined style={{ color: '#667eea', fontSize: '1.25rem' }} />
+              <Select
+                value={cityFilter}
+                onChange={handleCityChange}
+                style={{ flex: 1 }}
+                size="large"
+                placeholder="选择城市"
+              >
+                {cities.map(city => (
+                  <Select.Option key={city} value={city}>
+                    {city === 'all' ? '全部城市' : city}
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
+          </Col>
+          <Col xs={24} md={7}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>车型：</span>
               <Select
                 value={typeFilter}
-                onChange={setTypeFilter}
-                style={{ width: '200px' }}
+                onChange={handleTypeChange}
+                style={{ flex: 1 }}
                 size="large"
               >
                 {vehicleTypes.map(type => (
@@ -107,6 +189,30 @@ const VehicleList: React.FC = () => {
             </div>
           </Col>
         </Row>
+
+        {hasActiveFilters && (
+          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ color: '#666', fontSize: '0.875rem' }}>当前筛选：</span>
+            {searchText && (
+              <Tag color="blue" closable onClose={() => handleSearch('')}>
+                关键词：{searchText}
+              </Tag>
+            )}
+            {cityFilter !== 'all' && (
+              <Tag color="green" closable onClose={() => handleCityChange('all')}>
+                城市：{cityFilter}
+              </Tag>
+            )}
+            {typeFilter !== 'all' && (
+              <Tag color="purple" closable onClose={() => handleTypeChange('all')}>
+                车型：{typeFilter}
+              </Tag>
+            )}
+            <a onClick={clearAllFilters} style={{ fontSize: '0.875rem', marginLeft: '8px' }}>
+              清除全部
+            </a>
+          </div>
+        )}
       </div>
 
       <div style={{ background: 'white', padding: '32px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
@@ -155,6 +261,14 @@ const VehicleList: React.FC = () => {
             </Col>
           ))}
         </Row>
+
+        {filteredVehicles.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
+            <p>暂无符合条件的车辆</p>
+            <p style={{ fontSize: '0.875rem' }}>试试调整筛选条件？</p>
+          </div>
+        )}
       </div>
     </div>
   )
