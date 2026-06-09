@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { Card, Row, Col, Select, Input, Button, Tag, Slider } from 'antd'
 import { EnvironmentOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons'
@@ -148,8 +148,22 @@ const MapView: React.FC = () => {
     }
   }
 
-  const cities = ['北京', '上海', '广州', '深圳', '杭州', '成都']
-  const vehicleTypes = ['电动车', '轿车', 'SUV', '跑车', 'MPV']
+  const vehicleTypes = useMemo(() => {
+    const allVehicles = vehicles.length > 0 ? vehicles : [
+      { type: '电动车' }, { type: '轿车' }, { type: 'SUV' }, { type: '跑车' }, { type: 'MPV' }
+    ] as VehicleLocation[]
+    const types = [...new Set(allVehicles.map(v => v.type))]
+    return types
+  }, [vehicles])
+
+  const cities = useMemo(() => {
+    const allVehicles = vehicles.length > 0 ? vehicles : [
+      { location: '北京市朝阳区' }, { location: '上海市浦东新区' }, { location: '广州市天河区' },
+      { location: '深圳市南山区' }, { location: '杭州市西湖区' }, { location: '成都市高新区' }
+    ] as VehicleLocation[]
+    const citySet = new Set(allVehicles.map(v => extractCity(v.location)))
+    return Array.from(citySet)
+  }, [vehicles])
 
   const center = userLocation || [39.9042, 116.4074]
 
