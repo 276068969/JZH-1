@@ -64,7 +64,13 @@ const getStatusConfig = (status: string) => {
 }
 
 const formatDate = (dateStr: string) => {
-  if (!dateStr) return ''
+  if (!dateStr) {
+    return {
+      date: '',
+      weekday: '',
+      fullDate: ''
+    }
+  }
   const date = new Date(dateStr)
   const month = date.getMonth() + 1
   const day = date.getDate()
