@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
-import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message } from 'antd'
-import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined } from '@ant-design/icons'
+import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message, Slider, Space } from 'antd'
+import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined, FilterOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
 const { Search } = Input
+const { Option } = Select
 
 interface Vehicle {
   id: number
@@ -12,9 +13,13 @@ interface Vehicle {
   type: string
   price: number
   location: string
+  latitude?: number
+  longitude?: number
   available: boolean
   rating: number
   description: string
+  specs?: string
+  features?: string
 }
 
 const extractCity = (location: string): string => {
@@ -26,89 +31,127 @@ const VehicleList: React.FC = () => {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([])
-  const [searchText, setSearchText] = useState(searchParams.get('search') || '')
-  const [typeFilter, setTypeFilter] = useState<string>(searchParams.get('type') || 'all')
-  const [cityFilter, setCityFilter] = useState<string>(searchParams.get('city') || 'all')
+  const [loading, setLoading] = useState(false)
   const [compareIds, setCompareIds] = useState<number[]>([])
 
-  useEffect(() => {
-    const search = searchParams.get('search') || ''
-    const type = searchParams.get('type') || 'all'
-    const city = searchParams.get('city') || 'all'
-    setSearchText(search)
-    setTypeFilter(type)
-    setCityFilter(city)
-  }, [searchParams])
+  const searchText = searchParams.get('search') || ''
+  const typeFilter = searchParams.get('type') || ''
+  const cityFilter = searchParams.get('city') || ''
+  const minPrice = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0
+  const maxPrice = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 2000
+  const availableFilter = searchParams.get('available') || ''
+  const sortBy = searchParams.get('sortBy') || 'rating'
+  const sortOrder = searchParams.get('sortOrder') || 'desc'
 
   useEffect(() => {
     loadVehicles()
-  }, [])
-
-  useEffect(() => {
-    filterVehicles()
-  }, [searchText, typeFilter, cityFilter, vehicles])
+  }, [searchParams])
 
   const loadVehicles = async () => {
+    setLoading(true)
     try {
-      const response = await axios.get('/api/vehicles')
+      const params: any = {}
+      if (searchText) params.keyword = searchText
+      if (cityFilter) params.city = cityFilter
+      if (typeFilter) params.type = typeFilter
+      if (minPrice > 0) params.minPrice = minPrice
+      if (maxPrice < 2000) params.maxPrice = maxPrice
+      if (availableFilter) params.available = availableFilter === 'true'
+      if (sortBy) params.sortBy = sortBy
+      if (sortOrder) params.sortOrder = sortOrder
+
+      const response = await axios.get('/api/vehicles/search', { params })
       const data = response.data?.data || response.data
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setVehicles(data)
       } else {
         throw new Error('No data')
       }
     } catch (error) {
-      setVehicles([
-        { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', available: true, rating: 4.8, description: '高性能纯电动轿车' },
-        { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', available: true, rating: 4.9, description: '豪华商务轿车' },
-        { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', available: true, rating: 4.7, description: '科技感十足的豪华轿车' },
-        { id: 4, name: '奔驰 E级', type: '轿车', price: 429, location: '深圳市南山区', available: true, rating: 4.9, description: '尊贵舒适的商务座驾' },
-        { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', available: true, rating: 5.0, description: '极致驾驶体验' },
-        { id: 6, name: '大众 途观L', type: 'SUV', price: 259, location: '成都市高新区', available: true, rating: 4.6, description: '家庭出行首选' },
-        { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', available: true, rating: 4.8, description: '明星保姆车' },
-        { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', available: true, rating: 4.7, description: '智能电动SUV' },
-        { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', available: true, rating: 4.6, description: '全能城市SUV' },
-      ])
+      const mockVehicles: Vehicle[] = [
+        { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', latitude: 39.9042, longitude: 116.4074, available: true, rating: 4.8, description: '高性能纯电动轿车，续航500公里' },
+        { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', latitude: 31.2304, longitude: 121.4737, available: true, rating: 4.9, description: '豪华商务轿车，舒适驾乘' },
+        { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', latitude: 23.1291, longitude: 113.2644, available: true, rating: 4.7, description: '科技感十足的豪华轿车' },
+        { id: 4, name: '奔驰 E级', type: '轿车', price: 429, location: '深圳市南山区', latitude: 22.5431, longitude: 114.0579, available: false, rating: 4.9, description: '尊贵舒适的商务座驾' },
+        { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', latitude: 30.2741, longitude: 120.1551, available: true, rating: 5.0, description: '极致驾驶体验，澎湃动力' },
+        { id: 6, name: '大众 途观L', type: 'SUV', price: 259, location: '成都市高新区', latitude: 30.5728, longitude: 104.0668, available: true, rating: 4.6, description: '家庭出行首选' },
+        { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', latitude: 39.9599, longitude: 116.2982, available: true, rating: 4.8, description: '明星保姆车' },
+        { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', latitude: 31.2297, longitude: 121.4498, available: true, rating: 4.7, description: '智能电动SUV' },
+        { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', latitude: 23.1252, longitude: 113.2676, available: true, rating: 4.6, description: '全能城市SUV' },
+        { id: 10, name: '比亚迪 汉', type: '电动车', price: 239, location: '深圳市福田区', latitude: 22.5431, longitude: 114.0579, available: true, rating: 4.7, description: '国产旗舰电动轿车' },
+        { id: 11, name: '本田 奥德赛', type: 'MPV', price: 329, location: '杭州市余杭区', latitude: 30.4175, longitude: 120.3046, available: true, rating: 4.5, description: '家用MPV首选' },
+        { id: 12, name: '法拉利 488', type: '跑车', price: 1999, location: '北京市朝阳区', latitude: 39.9219, longitude: 116.4435, available: false, rating: 4.9, description: '意大利超跑，激情澎湃' },
+      ]
+      let filtered = mockVehicles
+
+      if (searchText) {
+        filtered = filtered.filter(v =>
+          v.name.toLowerCase().includes(searchText.toLowerCase()) ||
+          v.description.toLowerCase().includes(searchText.toLowerCase()) ||
+          v.type.toLowerCase().includes(searchText.toLowerCase())
+        )
+      }
+      if (cityFilter) {
+        filtered = filtered.filter(v => extractCity(v.location) === cityFilter)
+      }
+      if (typeFilter) {
+        filtered = filtered.filter(v => v.type === typeFilter)
+      }
+      if (minPrice > 0) {
+        filtered = filtered.filter(v => v.price >= minPrice)
+      }
+      if (maxPrice < 2000) {
+        filtered = filtered.filter(v => v.price <= maxPrice)
+      }
+      if (availableFilter) {
+        filtered = filtered.filter(v => v.available === (availableFilter === 'true'))
+      }
+
+      filtered.sort((a, b) => {
+        let result = 0
+        switch (sortBy) {
+          case 'price':
+            result = a.price - b.price
+            break
+          case 'rating':
+            result = a.rating - b.rating
+            break
+          case 'name':
+            result = a.name.localeCompare(b.name)
+            break
+          default:
+            result = a.rating - b.rating
+        }
+        return sortOrder === 'asc' ? result : -result
+      })
+
+      setVehicles(filtered)
+    } finally {
+      setLoading(false)
     }
-  }
-
-  const filterVehicles = () => {
-    let filtered = vehicles
-
-    if (searchText) {
-      filtered = filtered.filter(v =>
-        v.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        v.description.toLowerCase().includes(searchText.toLowerCase()) ||
-        v.type.toLowerCase().includes(searchText.toLowerCase())
-      )
-    }
-
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(v => v.type === typeFilter)
-    }
-
-    if (cityFilter !== 'all') {
-      filtered = filtered.filter(v => extractCity(v.location) === cityFilter)
-    }
-
-    setFilteredVehicles(filtered)
   }
 
   const vehicleTypes = useMemo(() => {
-    const types = ['all', ...new Set(vehicles.map(v => v.type))]
+    const allVehicles = vehicles.length > 0 ? vehicles : [
+      { type: '电动车' }, { type: '轿车' }, { type: 'SUV' }, { type: '跑车' }, { type: 'MPV' }
+    ]
+    const types = [...new Set(allVehicles.map(v => v.type))]
     return types
   }, [vehicles])
 
   const cities = useMemo(() => {
-    const citySet = new Set(vehicles.map(v => extractCity(v.location)))
-    return ['all', ...Array.from(citySet)]
+    const allVehicles = vehicles.length > 0 ? vehicles : [
+      { location: '北京市朝阳区' }, { location: '上海市浦东新区' }, { location: '广州市天河区' },
+      { location: '深圳市南山区' }, { location: '杭州市西湖区' }, { location: '成都市高新区' }
+    ]
+    const citySet = new Set(allVehicles.map(v => extractCity(v.location)))
+    return Array.from(citySet)
   }, [vehicles])
 
-  const updateFilters = (key: string, value: string) => {
+  const updateFilters = (key: string, value: string | number | null) => {
     const params = new URLSearchParams(searchParams)
-    if (value && value !== 'all') {
-      params.set(key, value)
+    if (value !== null && value !== undefined && value !== '') {
+      params.set(key, String(value))
     } else {
       params.delete(key)
     }
@@ -116,27 +159,36 @@ const VehicleList: React.FC = () => {
   }
 
   const handleSearch = (value: string) => {
-    setSearchText(value)
     updateFilters('search', value)
   }
 
   const handleTypeChange = (value: string) => {
-    setTypeFilter(value)
     updateFilters('type', value)
   }
 
   const handleCityChange = (value: string) => {
-    setCityFilter(value)
     updateFilters('city', value)
   }
 
-  const hasActiveFilters = searchText || typeFilter !== 'all' || cityFilter !== 'all'
+  const handlePriceChange = (values: number[]) => {
+    updateFilters('minPrice', values[0])
+    updateFilters('maxPrice', values[1])
+  }
+
+  const handleAvailableChange = (value: string) => {
+    updateFilters('available', value)
+  }
+
+  const handleSortChange = (value: string) => {
+    const [sortField, sortDir] = value.split('-')
+    updateFilters('sortBy', sortField)
+    updateFilters('sortOrder', sortDir)
+  }
+
+  const hasActiveFilters = searchText || typeFilter || cityFilter || minPrice > 0 || maxPrice < 2000 || availableFilter
 
   const clearAllFilters = () => {
-    setSearchText('')
-    setTypeFilter('all')
-    setCityFilter('all')
-    setSearchParams({})
+    setSearchParams({ sortBy: 'rating', sortOrder: 'desc' })
   }
 
   const toggleCompare = (id: number) => {
@@ -171,6 +223,8 @@ const VehicleList: React.FC = () => {
     return vehicles.filter(v => compareIds.includes(v.id))
   }, [vehicles, compareIds])
 
+  const currentSortValue = `${sortBy}-${sortOrder}`
+
   return (
     <div>
       <div style={{
@@ -181,7 +235,7 @@ const VehicleList: React.FC = () => {
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
       }}>
         <Row gutter={[16, 16]} align="middle">
-          <Col xs={24} md={10}>
+          <Col xs={24} md={8}>
             <Search
               placeholder="搜索车辆名称、类型或描述..."
               allowClear
@@ -189,41 +243,102 @@ const VehicleList: React.FC = () => {
               size="large"
               value={searchText}
               onSearch={handleSearch}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) => {
+                if (!e.target.value) {
+                  handleSearch('')
+                }
+              }}
             />
           </Col>
-          <Col xs={24} md={7}>
+          <Col xs={24} md={5}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <EnvironmentOutlined style={{ color: '#667eea', fontSize: '1.25rem' }} />
               <Select
-                value={cityFilter}
+                value={cityFilter || undefined}
                 onChange={handleCityChange}
                 style={{ flex: 1 }}
                 size="large"
                 placeholder="选择城市"
+                allowClear
               >
                 {cities.map(city => (
-                  <Select.Option key={city} value={city}>
-                    {city === 'all' ? '全部城市' : city}
-                  </Select.Option>
+                  <Option key={city} value={city}>{city}</Option>
                 ))}
               </Select>
             </div>
           </Col>
-          <Col xs={24} md={7}>
+          <Col xs={24} md={5}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span>车型：</span>
               <Select
-                value={typeFilter}
+                value={typeFilter || undefined}
                 onChange={handleTypeChange}
                 style={{ flex: 1 }}
                 size="large"
+                placeholder="全部车型"
+                allowClear
               >
                 {vehicleTypes.map(type => (
-                  <Select.Option key={type} value={type}>
-                    {type === 'all' ? '全部类型' : type}
-                  </Select.Option>
+                  <Option key={type} value={type}>{type}</Option>
                 ))}
+              </Select>
+            </div>
+          </Col>
+          <Col xs={24} md={6}>
+            <Select
+              value={currentSortValue}
+              onChange={handleSortChange}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="排序方式"
+            >
+              <Option value="rating-desc">评分从高到低</Option>
+              <Option value="rating-asc">评分从低到高</Option>
+              <Option value="price-asc">价格从低到高</Option>
+              <Option value="price-desc">价格从高到低</Option>
+              <Option value="name-asc">名称 A-Z</Option>
+              <Option value="name-desc">名称 Z-A</Option>
+            </Select>
+          </Col>
+        </Row>
+
+        <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+          <Col xs={24} md={10}>
+            <div style={{ padding: '0 8px' }}>
+              <div style={{ marginBottom: '8px', color: '#666', fontSize: '0.875rem' }}>
+                <FilterOutlined style={{ marginRight: '4px' }} />
+                价格区间：¥{minPrice} - ¥{maxPrice}
+              </div>
+              <Slider
+                range
+                min={0}
+                max={2000}
+                step={50}
+                value={[minPrice, maxPrice]}
+                onChange={handlePriceChange}
+                marks={{
+                  0: '¥0',
+                  500: '¥500',
+                  1000: '¥1000',
+                  1500: '¥1500',
+                  2000: '¥2000+'
+                }}
+              />
+            </div>
+          </Col>
+          <Col xs={24} md={6}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%' }}>
+              <span style={{ color: '#666', fontSize: '0.875rem' }}>可租状态：</span>
+              <Select
+                value={availableFilter || undefined}
+                onChange={handleAvailableChange}
+                style={{ flex: 1 }}
+                size="large"
+                placeholder="全部"
+                allowClear
+              >
+                <Option value="true">可租</Option>
+                <Option value="false">已租满</Option>
               </Select>
             </div>
           </Col>
@@ -237,14 +352,24 @@ const VehicleList: React.FC = () => {
                 关键词：{searchText}
               </Tag>
             )}
-            {cityFilter !== 'all' && (
-              <Tag color="green" closable onClose={() => handleCityChange('all')}>
+            {cityFilter && (
+              <Tag color="green" closable onClose={() => handleCityChange('')}>
                 城市：{cityFilter}
               </Tag>
             )}
-            {typeFilter !== 'all' && (
-              <Tag color="purple" closable onClose={() => handleTypeChange('all')}>
+            {typeFilter && (
+              <Tag color="purple" closable onClose={() => handleTypeChange('')}>
                 车型：{typeFilter}
+              </Tag>
+            )}
+            {(minPrice > 0 || maxPrice < 2000) && (
+              <Tag color="orange" closable onClose={() => { updateFilters('minPrice', null); updateFilters('maxPrice', null) }}>
+                价格：¥{minPrice} - ¥{maxPrice}
+              </Tag>
+            )}
+            {availableFilter && (
+              <Tag color={availableFilter === 'true' ? 'success' : 'red'} closable onClose={() => handleAvailableChange('')}>
+                {availableFilter === 'true' ? '可租' : '已租满'}
               </Tag>
             )}
             <a onClick={clearAllFilters} style={{ fontSize: '0.875rem', marginLeft: '8px' }}>
@@ -256,10 +381,10 @@ const VehicleList: React.FC = () => {
 
       <div style={{ background: 'white', padding: '32px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <h2 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>
-          共找到 {filteredVehicles.length} 辆车
+          共找到 {vehicles.length} 辆车
         </h2>
         <Row gutter={[24, 24]}>
-          {filteredVehicles.map(vehicle => (
+          {vehicles.map(vehicle => (
             <Col xs={24} sm={12} lg={8} key={vehicle.id}>
               <div className="vehicle-card" style={{
                 height: '100%',
@@ -281,6 +406,11 @@ const VehicleList: React.FC = () => {
                       boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                     }}
                   />
+                </div>
+                <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 10 }}>
+                  <Tag color={vehicle.available ? 'success' : 'default'}>
+                    {vehicle.available ? '可租' : '已租满'}
+                  </Tag>
                 </div>
                 <Link to={`/vehicles/${vehicle.id}`} style={{ textDecoration: 'none', display: 'block' }}>
                   <div className="vehicle-image" style={{ height: '180px' }}>🚗</div>
@@ -305,13 +435,14 @@ const VehicleList: React.FC = () => {
                         color: '#fa8c16',
                         padding: '4px 12px',
                         borderRadius: '4px',
-                        fontSize: '0.75rem'
+                        fontSize: '0.75rem',
+                        marginLeft: '8px'
                       }}>
                         📍 {vehicle.location}
                       </span>
                     </div>
                     <div style={{ marginTop: '12px' }}>
-                      <Rate disabled defaultValue={vehicle.rating} allowHalf style={{ fontSize: '0.875rem' }} />
+                      <Rate disabled value={vehicle.rating} allowHalf style={{ fontSize: '0.875rem' }} />
                       <span style={{ marginLeft: '8px', color: '#666' }}>{vehicle.rating}</span>
                     </div>
                   </div>
@@ -321,7 +452,7 @@ const VehicleList: React.FC = () => {
           ))}
         </Row>
 
-        {filteredVehicles.length === 0 && (
+        {vehicles.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#999' }}>
             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
             <p>暂无符合条件的车辆</p>

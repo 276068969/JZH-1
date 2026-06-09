@@ -1,11 +1,13 @@
 package com.carrental.controller;
 
+import com.carrental.dto.VehicleSearchRequest;
 import com.carrental.entity.Vehicle;
 import com.carrental.service.VehicleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,8 +44,26 @@ public class VehicleController {
     }
 
     @GetMapping("/locations")
-    public ResponseEntity<?> getVehicleLocations() {
-        List<Vehicle> vehicles = vehicleService.getAvailableVehicles();
+    public ResponseEntity<?> getVehicleLocations(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) Boolean available,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortOrder) {
+        VehicleSearchRequest request = new VehicleSearchRequest();
+        request.setKeyword(keyword);
+        request.setCity(city);
+        request.setType(type);
+        request.setMinPrice(minPrice);
+        request.setMaxPrice(maxPrice);
+        request.setAvailable(available != null ? available : true);
+        request.setSortBy(sortBy);
+        request.setSortOrder(sortOrder);
+
+        List<Vehicle> vehicles = vehicleService.searchVehicles(request);
 
         Map<String, Object> response = new HashMap<>();
         response.put("code", 200);
@@ -53,8 +73,26 @@ public class VehicleController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<?> searchVehicles(@RequestParam String keyword) {
-        List<Vehicle> vehicles = vehicleService.searchVehicles(keyword);
+    public ResponseEntity<?> searchVehicles(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) Boolean available,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortOrder) {
+        VehicleSearchRequest request = new VehicleSearchRequest();
+        request.setKeyword(keyword);
+        request.setCity(city);
+        request.setType(type);
+        request.setMinPrice(minPrice);
+        request.setMaxPrice(maxPrice);
+        request.setAvailable(available);
+        request.setSortBy(sortBy);
+        request.setSortOrder(sortOrder);
+
+        List<Vehicle> vehicles = vehicleService.searchVehicles(request);
 
         Map<String, Object> response = new HashMap<>();
         response.put("code", 200);
