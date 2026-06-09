@@ -39,7 +39,7 @@ const VehicleList: React.FC = () => {
   const cityFilter = searchParams.get('city') || ''
   const minPrice = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0
   const maxPrice = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 2000
-  const availableFilter = searchParams.get('available') || ''
+  const availableFilter = searchParams.get('available') || 'true'
   const sortBy = searchParams.get('sortBy') || 'rating'
   const sortOrder = searchParams.get('sortOrder') || 'desc'
 
@@ -56,7 +56,7 @@ const VehicleList: React.FC = () => {
       if (typeFilter) params.type = typeFilter
       if (minPrice > 0) params.minPrice = minPrice
       if (maxPrice < 2000) params.maxPrice = maxPrice
-      if (availableFilter) params.available = availableFilter === 'true'
+      if (availableFilter !== 'all') params.available = availableFilter === 'true'
       if (sortBy) params.sortBy = sortBy
       if (sortOrder) params.sortOrder = sortOrder
 
@@ -103,7 +103,7 @@ const VehicleList: React.FC = () => {
       if (maxPrice < 2000) {
         filtered = filtered.filter(v => v.price <= maxPrice)
       }
-      if (availableFilter) {
+      if (availableFilter !== 'all') {
         filtered = filtered.filter(v => v.available === (availableFilter === 'true'))
       }
 
@@ -185,7 +185,7 @@ const VehicleList: React.FC = () => {
     updateFilters('sortOrder', sortDir)
   }
 
-  const hasActiveFilters = searchText || typeFilter || cityFilter || minPrice > 0 || maxPrice < 2000 || availableFilter
+  const hasActiveFilters = searchText || typeFilter || cityFilter || minPrice > 0 || maxPrice < 2000 || availableFilter !== 'true'
 
   const clearAllFilters = () => {
     setSearchParams({ sortBy: 'rating', sortOrder: 'desc' })
@@ -330,13 +330,12 @@ const VehicleList: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%' }}>
               <span style={{ color: '#666', fontSize: '0.875rem' }}>可租状态：</span>
               <Select
-                value={availableFilter || undefined}
+                value={availableFilter}
                 onChange={handleAvailableChange}
                 style={{ flex: 1 }}
                 size="large"
-                placeholder="全部"
-                allowClear
               >
+                <Option value="all">全部</Option>
                 <Option value="true">可租</Option>
                 <Option value="false">已租满</Option>
               </Select>
@@ -367,9 +366,9 @@ const VehicleList: React.FC = () => {
                 价格：¥{minPrice} - ¥{maxPrice}
               </Tag>
             )}
-            {availableFilter && (
-              <Tag color={availableFilter === 'true' ? 'success' : 'red'} closable onClose={() => handleAvailableChange('')}>
-                {availableFilter === 'true' ? '可租' : '已租满'}
+            {availableFilter !== 'true' && (
+              <Tag color={availableFilter === 'false' ? 'red' : 'default'} closable onClose={() => handleAvailableChange('true')}>
+                {availableFilter === 'all' ? '全部车辆' : '已租满'}
               </Tag>
             )}
             <a onClick={clearAllFilters} style={{ fontSize: '0.875rem', marginLeft: '8px' }}>

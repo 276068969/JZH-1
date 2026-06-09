@@ -40,14 +40,14 @@ const MapView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [minPrice, setMinPrice] = useState<number>(0)
   const [maxPrice, setMaxPrice] = useState<number>(2000)
-  const [availableOnly, setAvailableOnly] = useState<boolean>(true)
+  const [availableFilter, setAvailableFilter] = useState<string>('true')
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
   const [, setLoading] = useState(false)
 
   useEffect(() => {
     loadVehicles()
     getUserLocation()
-  }, [selectedCity, typeFilter, minPrice, maxPrice, availableOnly])
+  }, [selectedCity, typeFilter, minPrice, maxPrice, availableFilter])
 
   const loadVehicles = async () => {
     setLoading(true)
@@ -58,11 +58,11 @@ const MapView: React.FC = () => {
       if (typeFilter) params.type = typeFilter
       if (minPrice > 0) params.minPrice = minPrice
       if (maxPrice < 2000) params.maxPrice = maxPrice
-      if (availableOnly) params.available = true
+      if (availableFilter !== 'all') params.available = availableFilter === 'true'
       params.sortBy = 'rating'
       params.sortOrder = 'desc'
 
-      const response = await axios.get('/api/vehicles/locations', { params })
+      const response = await axios.get('/api/vehicles/search', { params })
       const data = response.data?.data || response.data
       if (Array.isArray(data) && data.length > 0) {
         const vehicles = data.map((v: any) => ({
@@ -83,18 +83,18 @@ const MapView: React.FC = () => {
       }
     } catch (error) {
       const mockVehicles: VehicleLocation[] = [
-        { id: 1, name: '特斯拉 Model 3', lat: 39.9042, lng: 116.4074, type: '电动车', available: true, price: 299, location: '北京市朝阳区', rating: 4.8, description: '高性能纯电动轿车' },
-        { id: 2, name: '宝马 5系', lat: 31.2304, lng: 121.4737, type: '轿车', available: true, price: 399, location: '上海市浦东新区', rating: 4.9, description: '豪华商务轿车' },
+        { id: 1, name: '特斯拉 Model 3', lat: 39.9042, lng: 116.4074, type: '电动车', available: true, price: 299, location: '北京市朝阳区', rating: 4.8, description: '高性能纯电动轿车，续航500公里' },
+        { id: 2, name: '宝马 5系', lat: 31.2304, lng: 121.4737, type: '轿车', available: true, price: 399, location: '上海市浦东新区', rating: 4.9, description: '豪华商务轿车，舒适驾乘' },
         { id: 3, name: '奥迪 A6L', lat: 23.1291, lng: 113.2644, type: '轿车', available: true, price: 359, location: '广州市天河区', rating: 4.7, description: '科技感十足的豪华轿车' },
         { id: 4, name: '奔驰 E级', lat: 22.5431, lng: 114.0579, type: '轿车', available: false, price: 429, location: '深圳市南山区', rating: 4.9, description: '尊贵舒适的商务座驾' },
-        { id: 5, name: '保时捷 911', lat: 30.2741, lng: 120.1551, type: '跑车', available: true, price: 1299, location: '杭州市西湖区', rating: 5.0, description: '极致驾驶体验' },
+        { id: 5, name: '保时捷 911', lat: 30.2741, lng: 120.1551, type: '跑车', available: true, price: 1299, location: '杭州市西湖区', rating: 5.0, description: '极致驾驶体验，澎湃动力' },
         { id: 6, name: '大众 途观L', lat: 30.5728, lng: 104.0668, type: 'SUV', available: true, price: 259, location: '成都市高新区', rating: 4.6, description: '家庭出行首选' },
         { id: 7, name: '丰田 埃尔法', lat: 39.9599, lng: 116.2982, type: 'MPV', available: true, price: 599, location: '北京市海淀区', rating: 4.8, description: '明星保姆车' },
         { id: 8, name: '蔚来 ES8', lat: 31.2297, lng: 121.4498, type: '电动车', available: true, price: 499, location: '上海市静安区', rating: 4.7, description: '智能电动SUV' },
         { id: 9, name: '奥迪 Q5L', lat: 23.1252, lng: 113.2676, type: 'SUV', available: true, price: 379, location: '广州市越秀区', rating: 4.6, description: '全能城市SUV' },
         { id: 10, name: '比亚迪 汉', lat: 22.5431, lng: 114.0579, type: '电动车', available: true, price: 239, location: '深圳市福田区', rating: 4.7, description: '国产旗舰电动轿车' },
         { id: 11, name: '本田 奥德赛', lat: 30.4175, lng: 120.3046, type: 'MPV', available: true, price: 329, location: '杭州市余杭区', rating: 4.5, description: '家用MPV首选' },
-        { id: 12, name: '法拉利 488', lat: 39.9219, lng: 116.4435, type: '跑车', available: false, price: 1999, location: '北京市朝阳区', rating: 4.9, description: '意大利超跑' },
+        { id: 12, name: '法拉利 488', lat: 39.9219, lng: 116.4435, type: '跑车', available: false, price: 1999, location: '北京市朝阳区', rating: 4.9, description: '意大利超跑，激情澎湃' },
       ]
 
       let filtered = mockVehicles
@@ -102,6 +102,7 @@ const MapView: React.FC = () => {
       if (searchText) {
         filtered = filtered.filter(v =>
           v.name.toLowerCase().includes(searchText.toLowerCase()) ||
+          v.description.toLowerCase().includes(searchText.toLowerCase()) ||
           v.type.toLowerCase().includes(searchText.toLowerCase())
         )
       }
@@ -117,9 +118,14 @@ const MapView: React.FC = () => {
       if (maxPrice < 2000) {
         filtered = filtered.filter(v => v.price <= maxPrice)
       }
-      if (availableOnly) {
-        filtered = filtered.filter(v => v.available)
+      if (availableFilter !== 'all') {
+        filtered = filtered.filter(v => v.available === (availableFilter === 'true'))
       }
+
+      filtered.sort((a, b) => {
+        const result = a.rating - b.rating
+        return -result
+      })
 
       setVehicles(filtered)
     } finally {
@@ -258,13 +264,14 @@ const MapView: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%' }}>
               <span style={{ color: '#666', fontSize: '0.875rem' }}>可租状态：</span>
               <Select
-                value={availableOnly ? 'true' : 'all'}
-                onChange={(val) => setAvailableOnly(val === 'true')}
+                value={availableFilter}
+                onChange={setAvailableFilter}
                 style={{ flex: 1 }}
                 size="large"
               >
                 <Option value="all">全部</Option>
-                <Option value="true">仅显示可租</Option>
+                <Option value="true">可租</Option>
+                <Option value="false">已租满</Option>
               </Select>
             </div>
           </Col>
