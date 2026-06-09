@@ -23,6 +23,8 @@ public class Order {
 
     private String status;
 
+    private Integer renewCount;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

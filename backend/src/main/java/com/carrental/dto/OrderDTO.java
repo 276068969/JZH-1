@@ -13,6 +13,7 @@ public class OrderDTO {
     private LocalDateTime endDate;
     private BigDecimal totalPrice;
     private String status;
+    private Integer renewCount;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 

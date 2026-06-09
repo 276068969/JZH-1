@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,6 +44,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setEndDate(LocalDateTime.parse(endDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")));
         order.setTotalPrice(BigDecimal.valueOf(totalPrice));
         order.setStatus("pending");
+        order.setRenewCount(0);
         order.setCreateTime(LocalDateTime.now());
         order.setUpdateTime(LocalDateTime.now());
 
@@ -96,6 +98,101 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return result;
     }
 
+    @Override
+    public Map<String, Object> checkRenewAvailability(Long orderId, String newEndDate) {
+        Order order = this.getById(orderId);
+        if (order == null) {
+            throw new RuntimeException("订单不存在");
+        }
+
+        if (!"pending".equals(order.getStatus()) && !"active".equals(order.getStatus())) {
+            throw new RuntimeException("仅待取车和使用中的订单可续租");
+        }
+
+        LocalDateTime newEnd = LocalDateTime.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        LocalDateTime currentEnd = order.getEndDate();
+
+        if (!newEnd.isAfter(currentEnd)) {
+            throw new RuntimeException("续租结束日期必须晚于当前还车日期");
+        }
+
+        Vehicle vehicle = vehicleService.getVehicleById(order.getVehicleId());
+        if (vehicle == null) {
+            throw new RuntimeException("车辆信息不存在");
+        }
+
+        boolean available = isVehicleAvailableForRenew(order.getVehicleId(), orderId, currentEnd, newEnd);
+
+        long additionalDays = java.time.temporal.ChronoUnit.DAYS.between(
+                currentEnd.toLocalDate(), newEnd.toLocalDate());
+        BigDecimal additionalPrice = vehicle.getPrice().multiply(BigDecimal.valueOf(additionalDays));
+        BigDecimal newTotalPrice = order.getTotalPrice().add(additionalPrice);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("available", available);
+        result.put("currentEndDate", currentEnd);
+        result.put("newEndDate", newEnd);
+        result.put("additionalDays", additionalDays);
+        result.put("dailyPrice", vehicle.getPrice());
+        result.put("additionalPrice", additionalPrice);
+        result.put("originalTotalPrice", order.getTotalPrice());
+        result.put("newTotalPrice", newTotalPrice);
+
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public Order renewOrder(Long orderId, String newEndDate) {
+        Order order = this.getById(orderId);
+        if (order == null) {
+            throw new RuntimeException("订单不存在");
+        }
+
+        if (!"pending".equals(order.getStatus()) && !"active".equals(order.getStatus())) {
+            throw new RuntimeException("仅待取车和使用中的订单可续租");
+        }
+
+        LocalDateTime newEnd = LocalDateTime.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        LocalDateTime currentEnd = order.getEndDate();
+
+        if (!newEnd.isAfter(currentEnd)) {
+            throw new RuntimeException("续租结束日期必须晚于当前还车日期");
+        }
+
+        boolean available = isVehicleAvailableForRenew(order.getVehicleId(), orderId, currentEnd, newEnd);
+        if (!available) {
+            throw new RuntimeException("续租时段车辆已被预订，无法续租");
+        }
+
+        Vehicle vehicle = vehicleService.getVehicleById(order.getVehicleId());
+        long additionalDays = java.time.temporal.ChronoUnit.DAYS.between(
+                currentEnd.toLocalDate(), newEnd.toLocalDate());
+        BigDecimal additionalPrice = vehicle.getPrice().multiply(BigDecimal.valueOf(additionalDays));
+        BigDecimal newTotalPrice = order.getTotalPrice().add(additionalPrice);
+
+        order.setEndDate(newEnd);
+        order.setTotalPrice(newTotalPrice);
+        order.setRenewCount(order.getRenewCount() == null ? 1 : order.getRenewCount() + 1);
+        order.setUpdateTime(LocalDateTime.now());
+
+        this.updateById(order);
+        return order;
+    }
+
+    private boolean isVehicleAvailableForRenew(Long vehicleId, Long currentOrderId,
+                                               LocalDateTime periodStart, LocalDateTime periodEnd) {
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Order::getVehicleId, vehicleId)
+               .ne(Order::getId, currentOrderId)
+               .in(Order::getStatus, Arrays.asList("pending", "active"))
+               .and(w -> w.lt(Order::getStartDate, periodEnd)
+                           .gt(Order::getEndDate, periodStart));
+
+        List<Order> conflictingOrders = this.list(wrapper);
+        return conflictingOrders.isEmpty();
+    }
+
     private List<Vehicle> getMockVehicles() {
         Vehicle v1 = new Vehicle();
         v1.setId(1L);
@@ -136,6 +233,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         o1.setEndDate(LocalDateTime.now().plusDays(7));
         o1.setTotalPrice(new BigDecimal("1495"));
         o1.setStatus("pending");
+        o1.setRenewCount(0);
         o1.setCreateTime(LocalDateTime.now().minusDays(1));
 
         Order o2 = new Order();
@@ -146,6 +244,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         o2.setEndDate(LocalDateTime.now().plusDays(4).withHour(18).withMinute(0).withSecond(0).withNano(0));
         o2.setTotalPrice(new BigDecimal("1995"));
         o2.setStatus("active");
+        o2.setRenewCount(1);
         o2.setCreateTime(LocalDateTime.now().minusDays(3));
 
         Order o3 = new Order();
@@ -156,6 +255,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         o3.setEndDate(LocalDateTime.now().plusDays(18));
         o3.setTotalPrice(new BigDecimal("3897"));
         o3.setStatus("pending");
+        o3.setRenewCount(0);
         o3.setCreateTime(LocalDateTime.now().minusDays(5));
 
         Order o4 = new Order();
@@ -166,6 +266,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         o4.setEndDate(LocalDateTime.now().minusDays(15));
         o4.setTotalPrice(new BigDecimal("1495"));
         o4.setStatus("completed");
+        o4.setRenewCount(2);
         o4.setCreateTime(LocalDateTime.now().minusDays(22));
 
         return Arrays.asList(o3, o1, o2, o4);

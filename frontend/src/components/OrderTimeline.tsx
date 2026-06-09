@@ -7,7 +7,8 @@ import {
   ClockCircleOutlined,
   StarOutlined,
   DeleteOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  ReloadOutlined
 } from '@ant-design/icons'
 
 export interface OrderItem {
@@ -23,6 +24,7 @@ export interface OrderItem {
   endDate: string
   totalPrice: number
   status: 'pending' | 'active' | 'completed' | 'cancelled'
+  renewCount?: number
   createTime: string
 }
 
@@ -31,6 +33,7 @@ interface OrderTimelineProps {
   loading?: boolean
   onViewDetail?: (order: OrderItem) => void
   onCancel?: (orderId: number) => void
+  onRenew?: (order: OrderItem) => void
 }
 
 const getStatusConfig = (status: string) => {
@@ -139,7 +142,8 @@ const OrderCard: React.FC<{
   order: OrderItem
   onViewDetail?: (order: OrderItem) => void
   onCancel?: (orderId: number) => void
-}> = ({ order, onViewDetail, onCancel }) => {
+  onRenew?: (order: OrderItem) => void
+}> = ({ order, onViewDetail, onCancel, onRenew }) => {
   const statusConfig = getStatusConfig(order.status)
   const startInfo = formatDate(order.startDate)
   const endInfo = formatDate(order.endDate)
@@ -267,8 +271,27 @@ const OrderCard: React.FC<{
             </div>
             <div style={{ fontSize: '0.75rem', color: '#999' }}>
               共{days}天
+              {order.renewCount && order.renewCount > 0 && (
+                <span style={{ marginLeft: '8px', color: '#667eea' }}>
+                  已续租{order.renewCount}次
+                </span>
+              )}
             </div>
           </div>
+          {(order.status === 'pending' || order.status === 'active') && onRenew && (
+            <Button
+              type="text"
+              size="small"
+              icon={<ReloadOutlined />}
+              style={{ color: '#667eea' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onRenew(order)
+              }}
+            >
+              续租
+            </Button>
+          )}
           {order.status === 'pending' && onCancel && (
             <Button
               type="text"
@@ -332,7 +355,7 @@ const SectionHeader: React.FC<{
   </div>
 )
 
-const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDetail, onCancel }) => {
+const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDetail, onCancel, onRenew }) => {
   const { upcoming, active, completed } = groupOrders(orders)
 
   return (
@@ -351,6 +374,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               order={order}
               onViewDetail={onViewDetail}
               onCancel={onCancel}
+              onRenew={onRenew}
             />
           ))}
         </div>
@@ -370,6 +394,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               order={order}
               onViewDetail={onViewDetail}
               onCancel={onCancel}
+              onRenew={onRenew}
             />
           ))}
         </div>
@@ -389,6 +414,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               order={order}
               onViewDetail={onViewDetail}
               onCancel={onCancel}
+              onRenew={onRenew}
             />
           ))}
         </div>

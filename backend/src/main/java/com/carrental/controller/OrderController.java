@@ -66,4 +66,44 @@ public class OrderController {
 
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/{id}/renew/check")
+    public ResponseEntity<?> checkRenewAvailability(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+        try {
+            String newEndDate = params.get("newEndDate").toString();
+            Map<String, Object> result = orderService.checkRenewAvailability(id, newEndDate);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "查询成功");
+            response.put("data", result);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        }
+    }
+
+    @PostMapping("/{id}/renew")
+    public ResponseEntity<?> renewOrder(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+        try {
+            String newEndDate = params.get("newEndDate").toString();
+            Order order = orderService.renewOrder(id, newEndDate);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "续租成功");
+            response.put("data", order);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        }
+    }
 }
