@@ -44,6 +44,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: car-rental-backend
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
@@ -79,6 +81,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: car-rental-frontend
     ports:
       - "127.0.0.1:${FRONTEND_PORT}:80"

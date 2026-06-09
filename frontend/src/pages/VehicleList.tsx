@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
-import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message, Slider, Space } from 'antd'
+import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message, Slider } from 'antd'
 import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined, FilterOutlined } from '@ant-design/icons'
 import axios from 'axios'
 

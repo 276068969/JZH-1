@@ -42,7 +42,7 @@ const MapView: React.FC = () => {
   const [maxPrice, setMaxPrice] = useState<number>(2000)
   const [availableOnly, setAvailableOnly] = useState<boolean>(true)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
 
   useEffect(() => {
     loadVehicles()
