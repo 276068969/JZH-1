@@ -1,7 +1,7 @@
 package com.carrental.controller;
 
+import com.carrental.dto.OrderDTO;
 import com.carrental.entity.Order;
-import com.carrental.entity.Vehicle;
 import com.carrental.service.OrderService;
 import com.carrental.service.VehicleService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,12 +49,7 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<?> getOrders() {
-        List<Order> orders = orderService.getUserOrders(1L);
-
-        for (Order order : orders) {
-            Vehicle vehicle = vehicleService.getVehicleById(order.getVehicleId());
-            order.setStatus(order.getStatus());
-        }
+        List<OrderDTO> orders = orderService.getUserOrderDTOs(1L);
 
         Map<String, Object> response = new HashMap<>();
         response.put("code", 200);
