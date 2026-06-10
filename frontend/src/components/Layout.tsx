@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Layout as AntLayout, Menu, Button, Avatar, Dropdown, Tag } from 'antd'
 import {
   CarOutlined,
@@ -24,8 +24,6 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, isAuthenticated, isEnterpriseUser, onLogout }) => {
   const navigate = useNavigate()
-  const location = useLocation()
-
   const items = [
     { key: '/', icon: <HomeOutlined />, label: <Link to="/">首页</Link> },
     { key: '/vehicles', icon: <CarOutlined />, label: <Link to="/vehicles">车辆列表</Link> },

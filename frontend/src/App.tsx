@@ -25,7 +25,7 @@ interface UserInfo {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('token'))
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
-  const [loadingUser, setLoadingUser] = useState(false)
+  const [, setLoadingUser] = useState(false)
 
   const fetchUserInfo = async () => {
     if (!localStorage.getItem('token')) {

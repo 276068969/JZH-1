@@ -166,7 +166,7 @@ const EnterpriseRentalApply: React.FC = () => {
                 label="计划用车时间"
                 rules={[
                   { required: true, message: '请选择计划用车时间' },
-                  ({ getFieldValue }) => ({
+                  () => ({
                     validator(_, value) {
                       if (!value || value.length < 2) {
                         return Promise.resolve()
