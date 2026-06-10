@@ -105,16 +105,6 @@ const Home: React.FC = () => {
     navigate(`/vehicles?${params.toString()}`)
   }
 
-  const filteredVehicles = vehicles.filter(v => {
-    if (searchText && !v.name.toLowerCase().includes(searchText.toLowerCase()) && !v.type.toLowerCase().includes(searchText.toLowerCase())) {
-      return false
-    }
-    if (selectedCity !== 'all' && extractCity(v.location) !== selectedCity) {
-      return false
-    }
-    return true
-  })
-
   const hotTypes = [
     { type: '轿车', icon: '🚙', desc: '舒适商务之选' },
     { type: 'SUV', icon: '🚐', desc: '家庭出游必备' },
