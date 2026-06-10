@@ -1,6 +1,6 @@
 import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Layout as AntLayout, Menu, Button, Avatar, Dropdown } from 'antd'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Layout as AntLayout, Menu, Button, Avatar, Dropdown, Tag } from 'antd'
 import {
   CarOutlined,
   HomeOutlined,
@@ -8,7 +8,9 @@ import {
   UserOutlined,
   LogoutOutlined,
   ShoppingCartOutlined,
-  SwapOutlined
+  SwapOutlined,
+  ShopOutlined,
+  FileTextOutlined
 } from '@ant-design/icons'
 
 const { Header, Content, Footer } = AntLayout
@@ -16,11 +18,13 @@ const { Header, Content, Footer } = AntLayout
 interface LayoutProps {
   children: React.ReactNode
   isAuthenticated: boolean
+  isEnterpriseUser: boolean
   onLogout: () => void
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, isAuthenticated, onLogout }) => {
+const Layout: React.FC<LayoutProps> = ({ children, isAuthenticated, isEnterpriseUser, onLogout }) => {
   const navigate = useNavigate()
+  const location = useLocation()
 
   const items = [
     { key: '/', icon: <HomeOutlined />, label: <Link to="/">首页</Link> },
@@ -29,8 +33,25 @@ const Layout: React.FC<LayoutProps> = ({ children, isAuthenticated, onLogout }) 
     { key: '/map', icon: <EnvironmentOutlined />, label: <Link to="/map">地图视图</Link> },
   ]
 
+  if (isEnterpriseUser) {
+    items.push({
+      key: '/enterprise-rental/apply',
+      icon: <ShopOutlined />,
+      label: (
+        <Link to="/enterprise-rental/apply" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          企业长租
+          <Tag color="purple" style={{ marginLeft: '4px' }}>专属</Tag>
+        </Link>
+      )
+    })
+  }
+
   const userMenuItems = [
     { key: 'orders', icon: <ShoppingCartOutlined />, label: <Link to="/orders">我的订单</Link> },
+    ...(isEnterpriseUser ? [
+      { key: 'enterprise-apply', icon: <FileTextOutlined />, label: <Link to="/enterprise-rental/apply">提交长租申请</Link> },
+      { key: 'enterprise-orders', icon: <ShopOutlined />, label: <Link to="/orders" state={{ activeKey: 'enterprise' }}>长租申请记录</Link> }
+    ] : []),
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true }
   ]

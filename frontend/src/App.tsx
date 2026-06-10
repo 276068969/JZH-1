@@ -12,9 +12,40 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Orders from './pages/Orders'
 import MapView from './pages/MapView'
+import EnterpriseRentalApply from './pages/EnterpriseRentalApply'
+
+interface UserInfo {
+  id: number
+  username: string
+  email: string
+  phone: string
+  userType: 'personal' | 'enterprise'
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('token'))
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+  const [loadingUser, setLoadingUser] = useState(false)
+
+  const fetchUserInfo = async () => {
+    if (!localStorage.getItem('token')) {
+      setUserInfo(null)
+      return
+    }
+    setLoadingUser(true)
+    try {
+      const response = await axios.get('/api/auth/me')
+      if (response.data?.code === 200) {
+        setUserInfo(response.data.data)
+      } else {
+        setUserInfo(null)
+      }
+    } catch (error) {
+      setUserInfo(null)
+    } finally {
+      setLoadingUser(false)
+    }
+  }
 
   useEffect(() => {
     const interceptor = axios.interceptors.request.use((config) => {
@@ -30,6 +61,12 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUserInfo()
+    }
+  }, [isAuthenticated])
+
   const handleLogin = () => {
     setIsAuthenticated(true)
   }
@@ -37,12 +74,19 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token')
     setIsAuthenticated(false)
+    setUserInfo(null)
   }
+
+  const isEnterpriseUser = userInfo?.userType === 'enterprise'
 
   return (
     <ConfigProvider locale={zhCN}>
       <Router>
-        <Layout isAuthenticated={isAuthenticated} onLogout={handleLogout}>
+        <Layout
+          isAuthenticated={isAuthenticated}
+          isEnterpriseUser={isEnterpriseUser}
+          onLogout={handleLogout}
+        >
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/vehicles" element={<VehicleList />} />
@@ -53,7 +97,11 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route
               path="/orders"
-              element={isAuthenticated ? <Orders /> : <Navigate to="/login" />}
+              element={isAuthenticated ? <Orders isEnterpriseUser={isEnterpriseUser} /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="/enterprise-rental/apply"
+              element={isAuthenticated && isEnterpriseUser ? <EnterpriseRentalApply /> : <Navigate to="/login" />}
             />
           </Routes>
         </Layout>

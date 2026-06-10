@@ -57,6 +57,29 @@ public class JwtAuthHelper {
         return jwtUtil.getUsernameFromToken(token);
     }
 
+    public User getCurrentUser() {
+        String username = getCurrentUsername();
+        if (username == null) {
+            return null;
+        }
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getUsername, username);
+        return userMapper.selectOne(wrapper);
+    }
+
+    public User getCurrentUserRequired() {
+        User user = getCurrentUser();
+        if (user == null) {
+            throw new RuntimeException("未登录或登录已过期，请重新登录");
+        }
+        return user;
+    }
+
+    public String getCurrentUserType() {
+        User user = getCurrentUser();
+        return user != null ? user.getUserType() : null;
+    }
+
     private HttpServletRequest getCurrentRequest() {
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         return attrs != null ? attrs.getRequest() : null;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Card, Table, Tag, Button, Modal, message, Tabs, Descriptions, Radio, DatePicker, Alert, Divider } from 'antd'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { Card, Table, Tag, Button, Modal, message, Tabs, Descriptions, Radio, DatePicker, Alert, Divider, Row, Col, Empty, Badge } from 'antd'
 import {
   EnvironmentOutlined,
   CalendarOutlined,
@@ -12,7 +12,14 @@ import {
   StarOutlined,
   ReloadOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  ShopOutlined,
+  FileTextOutlined,
+  UserOutlined,
+  PhoneOutlined,
+  MailOutlined,
+  SafetyCertificateOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
@@ -35,6 +42,24 @@ interface Order {
   createTime: string
 }
 
+interface EnterpriseApplication {
+  id: number
+  userId: number
+  plannedStartDate: string
+  plannedEndDate: string
+  vehiclePreference: string
+  estimatedQuantity: number
+  contactName: string
+  contactPhone: string
+  contactEmail: string
+  businessPurpose: string
+  specialRequirements: string
+  status: 'pending' | 'approved' | 'rejected' | 'completed'
+  reviewComment: string
+  createTime: string
+  updateTime: string
+}
+
 interface RenewCheckResult {
   available: boolean
   currentEndDate: string
@@ -46,10 +71,21 @@ interface RenewCheckResult {
   newTotalPrice: number
 }
 
-const Orders: React.FC = () => {
+interface OrdersProps {
+  isEnterpriseUser?: boolean
+}
+
+const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const locationState = location.state as { activeKey?: string } | null
+  const initialActiveKey = locationState?.activeKey === 'enterprise' && isEnterpriseUser ? 'enterprise' : 'personal'
+
+  const [mainTabKey, setMainTabKey] = useState<string>(initialActiveKey)
+
   const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loadingOrders, setLoadingOrders] = useState(false)
   const [ordersError, setOrdersError] = useState<string | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [viewMode, setViewMode] = useState<'timeline' | 'table'>('timeline')
@@ -60,12 +96,21 @@ const Orders: React.FC = () => {
   const [checkingAvailability, setCheckingAvailability] = useState(false)
   const [confirmingRenew, setConfirmingRenew] = useState(false)
 
+  const [applications, setApplications] = useState<EnterpriseApplication[]>([])
+  const [loadingApplications, setLoadingApplications] = useState(false)
+  const [applicationsError, setApplicationsError] = useState<string | null>(null)
+  const [selectedApplication, setSelectedApplication] = useState<EnterpriseApplication | null>(null)
+
   useEffect(() => {
-    loadOrders()
-  }, [])
+    if (mainTabKey === 'personal') {
+      loadOrders()
+    } else if (mainTabKey === 'enterprise') {
+      loadApplications()
+    }
+  }, [mainTabKey])
 
   const loadOrders = async () => {
-    setLoading(true)
+    setLoadingOrders(true)
     setOrdersError(null)
     try {
       const response = await axios.get('/api/orders')
@@ -102,7 +147,39 @@ const Orders: React.FC = () => {
         setOrdersError(error.response?.data?.message || '加载订单失败，请稍后重试')
       }
     } finally {
-      setLoading(false)
+      setLoadingOrders(false)
+    }
+  }
+
+  const loadApplications = async () => {
+    setLoadingApplications(true)
+    setApplicationsError(null)
+    try {
+      const response = await axios.get('/api/enterprise-rental/applications')
+      if (response.data?.code === 401) {
+        setApplicationsError('登录已过期，请重新登录')
+        return
+      }
+      if (response.data?.code === 403) {
+        setApplicationsError(response.data?.message || '无权限访问')
+        return
+      }
+      const data = response.data?.data
+      if (Array.isArray(data)) {
+        setApplications(data)
+      } else {
+        setApplications([])
+      }
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        setApplicationsError('登录已过期，请重新登录')
+      } else if (error.response?.status === 403) {
+        setApplicationsError(error.response?.data?.message || '无权限访问')
+      } else {
+        setApplicationsError(error.response?.data?.message || '加载申请记录失败，请稍后重试')
+      }
+    } finally {
+      setLoadingApplications(false)
     }
   }
 
@@ -180,7 +257,7 @@ const Orders: React.FC = () => {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getOrderStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: 'orange',
       active: 'green',
@@ -190,7 +267,7 @@ const Orders: React.FC = () => {
     return colors[status] || 'default'
   }
 
-  const getStatusText = (status: string) => {
+  const getOrderStatusText = (status: string) => {
     const texts: Record<string, string> = {
       pending: '待取车',
       active: '使用中',
@@ -200,12 +277,37 @@ const Orders: React.FC = () => {
     return texts[status] || status
   }
 
+  const getApplicationStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      pending: 'orange',
+      approved: 'green',
+      rejected: 'red',
+      completed: 'blue'
+    }
+    return colors[status] || 'default'
+  }
+
+  const getApplicationStatusText = (status: string) => {
+    const texts: Record<string, string> = {
+      pending: '审核中',
+      approved: '已通过',
+      rejected: '已拒绝',
+      completed: '已完成'
+    }
+    return texts[status] || status
+  }
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return ''
     return dateStr.split('T')[0]
   }
 
-  const columns = [
+  const formatDateTime = (dateTimeStr: string) => {
+    if (!dateTimeStr) return ''
+    return dateTimeStr.replace('T', ' ').split('.')[0]
+  }
+
+  const orderColumns = [
     {
       title: '订单号',
       dataIndex: 'id',
@@ -252,7 +354,7 @@ const Orders: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
-        <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
+        <Tag color={getOrderStatusColor(status)}>{getOrderStatusText(status)}</Tag>
       )
     },
     {
@@ -290,8 +392,98 @@ const Orders: React.FC = () => {
     }
   ]
 
+  const applicationColumns = [
+    {
+      title: '申请编号',
+      dataIndex: 'id',
+      key: 'id',
+      render: (id: number) => `#${id.toString().padStart(6, '0')}`
+    },
+    {
+      title: '计划用车时间',
+      key: 'period',
+      render: (_: any, record: EnterpriseApplication) => (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <CalendarOutlined style={{ color: '#667eea' }} />
+            <span>{formatDate(record.plannedStartDate)} 至 {formatDate(record.plannedEndDate)}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: '车型偏好',
+      dataIndex: 'vehiclePreference',
+      key: 'vehiclePreference',
+      render: (pref: string) => (
+        <div>
+          {pref?.split(',').map((p, i) => (
+            <Tag key={i} color="purple" style={{ marginBottom: '4px' }}>{p}</Tag>
+          ))}
+        </div>
+      )
+    },
+    {
+      title: '预计数量',
+      dataIndex: 'estimatedQuantity',
+      key: 'estimatedQuantity',
+      render: (qty: number) => `${qty} 辆`
+    },
+    {
+      title: '联系人',
+      key: 'contact',
+      render: (_: any, record: EnterpriseApplication) => (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <UserOutlined style={{ color: '#667eea' }} />
+            <span>{record.contactName}</span>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '4px' }}>
+            {record.contactPhone}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Badge
+          status={
+            status === 'pending' ? 'processing' :
+            status === 'approved' ? 'success' :
+            status === 'rejected' ? 'error' : 'default'
+          }
+          text={<Tag color={getApplicationStatusColor(status)}>{getApplicationStatusText(status)}</Tag>}
+        />
+      )
+    },
+    {
+      title: '申请时间',
+      dataIndex: 'createTime',
+      key: 'createTime',
+      render: (time: string) => formatDateTime(time)
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: any, record: EnterpriseApplication) => (
+        <Button
+          type="link"
+          onClick={() => setSelectedApplication(record)}
+        >
+          查看详情
+        </Button>
+      )
+    }
+  ]
+
   const activeOrders = orders.filter(o => o.status === 'active' || o.status === 'pending')
   const completedOrders = orders.filter(o => o.status === 'completed' || o.status === 'cancelled')
+
+  const pendingApplications = applications.filter(a => a.status === 'pending')
+  const processedApplications = applications.filter(a => a.status !== 'pending')
 
   const timelineOrders: OrderItem[] = orders.map(o => ({
     id: o.id,
@@ -310,20 +502,247 @@ const Orders: React.FC = () => {
     createTime: o.createTime
   }))
 
+  const renderPersonalOrders = () => {
+    if (ordersError) {
+      return (
+        <Alert
+          message={ordersError}
+          description={ordersError.includes('登录') ? '请重新登录后查看订单' : '请检查网络连接后重试'}
+          type={ordersError.includes('登录') ? 'warning' : 'error'}
+          showIcon
+          action={
+            ordersError.includes('登录') ? (
+              <Button size="small" type="primary" onClick={() => navigate('/login')}>
+                去登录
+              </Button>
+            ) : (
+              <Button size="small" onClick={loadOrders}>
+                重试
+              </Button>
+            )
+          }
+        />
+      )
+    }
+
+    if (viewMode === 'timeline') {
+      return (
+        <OrderTimeline
+          orders={timelineOrders}
+          loading={loadingOrders}
+          onViewDetail={(order) => {
+            const fullOrder = orders.find(o => o.id === order.id)
+            if (fullOrder) setSelectedOrder(fullOrder)
+          }}
+          onCancel={handleCancel}
+          onRenew={handleRenew}
+        />
+      )
+    }
+
+    return (
+      <Tabs
+        defaultActiveKey="active"
+        items={[
+          {
+            key: 'active',
+            label: `进行中 (${activeOrders.length})`,
+            children: (
+              <Table
+                columns={orderColumns}
+                dataSource={activeOrders}
+                rowKey="id"
+                loading={loadingOrders}
+                pagination={false}
+                locale={{ emptyText: <Empty description="暂无进行中的订单" /> }}
+              />
+            )
+          },
+          {
+            key: 'completed',
+            label: `历史订单 (${completedOrders.length})`,
+            children: (
+              <Table
+                columns={orderColumns}
+                dataSource={completedOrders}
+                rowKey="id"
+                loading={loadingOrders}
+                pagination={{ pageSize: 10 }}
+                locale={{ emptyText: <Empty description="暂无历史订单" /> }}
+              />
+            )
+          }
+        ]}
+      />
+    )
+  }
+
+  const renderEnterpriseApplications = () => {
+    if (applicationsError) {
+      return (
+        <Alert
+          message={applicationsError}
+          description={applicationsError.includes('登录') ? '请重新登录后查看申请记录' : '请检查网络连接后重试'}
+          type={applicationsError.includes('登录') || applicationsError.includes('权限') ? 'warning' : 'error'}
+          showIcon
+          action={
+            applicationsError.includes('登录') ? (
+              <Button size="small" type="primary" onClick={() => navigate('/login')}>
+                去登录
+              </Button>
+            ) : (
+              <Button size="small" onClick={loadApplications}>
+                重试
+              </Button>
+            )
+          }
+        />
+      )
+    }
+
+    return (
+      <div>
+        <Alert
+          message="企业长租服务说明"
+          description="提交申请后，专属客户经理将在1-3个工作日内与您联系，为您提供定制化用车方案。"
+          type="info"
+          showIcon
+          icon={<SafetyCertificateOutlined />}
+          style={{ marginBottom: '20px', borderRadius: '8px' }}
+        />
+
+        <div style={{ marginBottom: '16px', textAlign: 'right' }}>
+          <Button
+            type="primary"
+            icon={<FileTextOutlined />}
+            onClick={() => navigate('/enterprise-rental/apply')}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: 'none'
+            }}
+          >
+            提交新申请
+          </Button>
+        </div>
+
+        <Tabs
+          defaultActiveKey="pending"
+          items={[
+            {
+              key: 'pending',
+              label: (
+                <span>
+                  <ClockCircleOutlined /> 审核中 ({pendingApplications.length})
+                </span>
+              ),
+              children: (
+                <Table
+                  columns={applicationColumns}
+                  dataSource={pendingApplications}
+                  rowKey="id"
+                  loading={loadingApplications}
+                  pagination={false}
+                  locale={{ emptyText: <Empty description="暂无审核中的申请" /> }}
+                />
+              )
+            },
+            {
+              key: 'processed',
+              label: (
+                <span>
+                  <CheckCircleOutlined /> 已处理 ({processedApplications.length})
+                </span>
+              ),
+              children: (
+                <Table
+                  columns={applicationColumns}
+                  dataSource={processedApplications}
+                  rowKey="id"
+                  loading={loadingApplications}
+                  pagination={{ pageSize: 10 }}
+                  locale={{ emptyText: <Empty description="暂无已处理的申请" /> }}
+                />
+              )
+            }
+          ]}
+        />
+      </div>
+    )
+  }
+
+  const mainTabItems = isEnterpriseUser
+    ? [
+        {
+          key: 'personal',
+          label: (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShoppingCartOutlined />
+              个人租车订单
+            </span>
+          ),
+          children: (
+            <div style={{ marginTop: '16px' }}>
+              {renderPersonalOrders()}
+            </div>
+          )
+        },
+        {
+          key: 'enterprise',
+          label: (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ShopOutlined />
+              企业长租申请
+              <Tag color="purple" style={{ marginLeft: '4px' }}>专属</Tag>
+            </span>
+          ),
+          children: (
+            <div style={{ marginTop: '16px' }}>
+              {renderEnterpriseApplications()}
+            </div>
+          )
+        }
+      ]
+    : null
+
   return (
     <div>
       <Card
         title={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          isEnterpriseUser ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <ShoppingCartOutlined style={{ color: '#667eea', fontSize: '1.25rem' }} />
-              <span>我的订单</span>
+              <span>我的订单与申请</span>
             </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ShoppingCartOutlined style={{ color: '#667eea', fontSize: '1.25rem' }} />
+                <span>我的订单</span>
+              </div>
+              <Radio.Group
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value)}
+                size="small"
+                style={{ marginRight: '16px' }}
+              >
+                <Radio.Button value="timeline">
+                  <AppstoreOutlined /> 行程看板
+                </Radio.Button>
+                <Radio.Button value="table">
+                  <UnorderedListOutlined /> 列表视图
+                </Radio.Button>
+              </Radio.Group>
+            </div>
+          )
+        }
+        style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+        bodyStyle={{ padding: '24px' }}
+        extra={
+          isEnterpriseUser && mainTabKey === 'personal' ? (
             <Radio.Group
               value={viewMode}
               onChange={(e) => setViewMode(e.target.value)}
               size="small"
-              style={{ marginRight: '16px' }}
             >
               <Radio.Button value="timeline">
                 <AppstoreOutlined /> 行程看板
@@ -332,72 +751,18 @@ const Orders: React.FC = () => {
                 <UnorderedListOutlined /> 列表视图
               </Radio.Button>
             </Radio.Group>
-          </div>
+          ) : null
         }
-        style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-        bodyStyle={{ padding: '24px' }}
       >
-        {ordersError ? (
-          <Alert
-            message={ordersError}
-            description={ordersError.includes('登录') ? '请重新登录后查看订单' : '请检查网络连接后重试'}
-            type={ordersError.includes('登录') ? 'warning' : 'error'}
-            showIcon
-            action={
-              ordersError.includes('登录') ? (
-                <Button size="small" type="primary" onClick={() => navigate('/login')}>
-                  去登录
-                </Button>
-              ) : (
-                <Button size="small" onClick={loadOrders}>
-                  重试
-                </Button>
-              )
-            }
-          />
-        ) : viewMode === 'timeline' ? (
-          <OrderTimeline
-            orders={timelineOrders}
-            loading={loading}
-            onViewDetail={(order) => {
-              const fullOrder = orders.find(o => o.id === order.id)
-              if (fullOrder) setSelectedOrder(fullOrder)
-            }}
-            onCancel={handleCancel}
-            onRenew={handleRenew}
+        {isEnterpriseUser && mainTabItems ? (
+          <Tabs
+            activeKey={mainTabKey}
+            onChange={setMainTabKey}
+            items={mainTabItems}
+            size="large"
           />
         ) : (
-          <Tabs
-            defaultActiveKey="active"
-            items={[
-              {
-                key: 'active',
-                label: `进行中 (${activeOrders.length})`,
-                children: (
-                  <Table
-                    columns={columns}
-                    dataSource={activeOrders}
-                    rowKey="id"
-                    loading={loading}
-                    pagination={false}
-                  />
-                )
-              },
-              {
-                key: 'completed',
-                label: `历史订单 (${completedOrders.length})`,
-                children: (
-                  <Table
-                    columns={columns}
-                    dataSource={completedOrders}
-                    rowKey="id"
-                    loading={loading}
-                    pagination={{ pageSize: 10 }}
-                  />
-                )
-              }
-            ]}
-          />
+          renderPersonalOrders()
         )}
       </Card>
 
@@ -456,8 +821,8 @@ const Orders: React.FC = () => {
                 </span>
               </Descriptions.Item>
               <Descriptions.Item label="订单状态">
-                <Tag color={getStatusColor(selectedOrder.status)}>
-                  {getStatusText(selectedOrder.status)}
+                <Tag color={getOrderStatusColor(selectedOrder.status)}>
+                  {getOrderStatusText(selectedOrder.status)}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="车辆描述">
@@ -465,6 +830,133 @@ const Orders: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="下单时间">
                 {selectedOrder.createTime}
+              </Descriptions.Item>
+            </Descriptions>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShopOutlined style={{ color: '#667eea' }} />
+            <span>企业长租申请详情</span>
+          </div>
+        }
+        open={!!selectedApplication}
+        onCancel={() => setSelectedApplication(null)}
+        footer={[
+          <Button key="close" onClick={() => setSelectedApplication(null)}>
+            关闭
+          </Button>
+        ]}
+        width={600}
+      >
+        {selectedApplication && (
+          <div>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '8px',
+                padding: '20px',
+                color: 'white',
+                marginBottom: '20px'
+              }}
+            >
+              <Row gutter={16}>
+                <Col span={12}>
+                  <div style={{ fontSize: '0.875rem', opacity: 0.9, marginBottom: '4px' }}>申请编号</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '600' }}>
+                    #{selectedApplication.id.toString().padStart(6, '0')}
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div style={{ fontSize: '0.875rem', opacity: 0.9, marginBottom: '4px' }}>当前状态</div>
+                  <Tag color={getApplicationStatusColor(selectedApplication.status)} style={{ marginTop: '4px' }}>
+                    {getApplicationStatusText(selectedApplication.status)}
+                  </Tag>
+                </Col>
+              </Row>
+            </div>
+
+            {selectedApplication.reviewComment && (
+              <Alert
+                message={selectedApplication.status === 'approved' ? '审核通过' : selectedApplication.status === 'rejected' ? '审核拒绝' : '审核意见'}
+                description={selectedApplication.reviewComment}
+                type={selectedApplication.status === 'approved' ? 'success' : selectedApplication.status === 'rejected' ? 'error' : 'info'}
+                showIcon
+                style={{ marginBottom: '20px', borderRadius: '8px' }}
+              />
+            )}
+
+            <Divider orientation="left" style={{ margin: '12px 0 16px 0' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CalendarOutlined style={{ color: '#667eea' }} />
+                用车计划
+              </span>
+            </Divider>
+
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: '16px' }}>
+              <Descriptions.Item label="计划开始日期">
+                {formatDate(selectedApplication.plannedStartDate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="计划结束日期">
+                {formatDate(selectedApplication.plannedEndDate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="车型偏好">
+                {selectedApplication.vehiclePreference?.split(',').map((p, i) => (
+                  <Tag key={i} color="purple" style={{ marginBottom: '4px' }}>{p}</Tag>
+                ))}
+              </Descriptions.Item>
+              <Descriptions.Item label="预计用车数量">
+                {selectedApplication.estimatedQuantity} 辆
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider orientation="left" style={{ margin: '12px 0 16px 0' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <UserOutlined style={{ color: '#667eea' }} />
+                联系人信息
+              </span>
+            </Divider>
+
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: '16px' }}>
+              <Descriptions.Item label="联系人姓名">
+                <UserOutlined style={{ marginRight: '6px', color: '#667eea' }} />
+                {selectedApplication.contactName}
+              </Descriptions.Item>
+              <Descriptions.Item label="联系电话">
+                <PhoneOutlined style={{ marginRight: '6px', color: '#667eea' }} />
+                {selectedApplication.contactPhone}
+              </Descriptions.Item>
+              <Descriptions.Item label="联系邮箱">
+                <MailOutlined style={{ marginRight: '6px', color: '#667eea' }} />
+                {selectedApplication.contactEmail}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider orientation="left" style={{ margin: '12px 0 16px 0' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileTextOutlined style={{ color: '#667eea' }} />
+                需求详情
+              </span>
+            </Divider>
+
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: '16px' }}>
+              <Descriptions.Item label="企业用途说明">
+                {selectedApplication.businessPurpose || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="特殊要求">
+                {selectedApplication.specialRequirements || '-'}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Descriptions column={1} size="small">
+              <Descriptions.Item label="申请时间">
+                {formatDateTime(selectedApplication.createTime)}
+              </Descriptions.Item>
+              <Descriptions.Item label="最后更新">
+                {formatDateTime(selectedApplication.updateTime)}
               </Descriptions.Item>
             </Descriptions>
           </div>
@@ -592,7 +1084,7 @@ const Orders: React.FC = () => {
                   </Descriptions.Item>
                   <Descriptions.Item label="续租费用">
                     <span style={{ color: '#667eea' }}>
-                      ¥{renewCheckResult.dailyPrice} × {renewCheckResult.additionalDays}天 = 
+                      ¥{renewCheckResult.dailyPrice} × {renewCheckResult.additionalDays}天 =
                       <span style={{ fontWeight: 'bold', marginLeft: '4px' }}>
                         ¥{renewCheckResult.additionalPrice}
                       </span>

@@ -61,6 +61,29 @@ INSERT INTO `users` (`username`, `password`, `email`, `phone`, `user_type`) VALU
 ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', 'admin@carrental.com', '13800138000', 'enterprise'),
 ('test', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', 'test@carrental.com', '13900139000', 'personal');
 
+CREATE TABLE IF NOT EXISTS `enterprise_rental_applications` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `planned_start_date` DATE NOT NULL,
+  `planned_end_date` DATE NOT NULL,
+  `vehicle_preference` VARCHAR(200),
+  `estimated_quantity` INT NOT NULL DEFAULT 1,
+  `contact_name` VARCHAR(50) NOT NULL,
+  `contact_phone` VARCHAR(20) NOT NULL,
+  `contact_email` VARCHAR(100),
+  `business_purpose` VARCHAR(500),
+  `special_requirements` TEXT,
+  `status` VARCHAR(20) DEFAULT 'pending',
+  `review_comment` VARCHAR(500),
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted` TINYINT DEFAULT 0,
+  PRIMARY KEY (`id`),
+  INDEX `idx_user_id` (`user_id`),
+  INDEX `idx_status` (`status`),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO `vehicles` (`name`, `type`, `price`, `location`, `latitude`, `longitude`, `available`, `rating`, `description`, `specs`, `features`) VALUES
 ('特斯拉 Model 3', '电动车', 299.00, '北京市朝阳区', 39.9042, 116.4074, TRUE, 4.8, '高性能纯电动轿车，续航500公里，搭载自动驾驶系统', '座位数:5|变速箱:自动|燃料:纯电动|年份:2024', '自动驾驶,全景天窗,智能互联,快速充电,辅助泊车,OTA升级'),
 ('宝马 5系', '轿车', 399.00, '上海市浦东新区', 31.2304, 121.4737, TRUE, 4.9, '豪华商务轿车，舒适驾乘体验', '座位数:5|变速箱:自动|燃料:汽油|年份:2024', '真皮座椅,导航系统,全景天窗,氛围灯,哈曼卡顿音响'),
