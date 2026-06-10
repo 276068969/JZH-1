@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { Card, Row, Col, Select, Input, Button, Tag, Slider } from 'antd'
-import { EnvironmentOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons'
+import { EnvironmentOutlined, SearchOutlined, FilterOutlined, CarOutlined } from '@ant-design/icons'
 import L from 'leaflet'
 import axios from 'axios'
 
@@ -21,12 +21,32 @@ interface VehicleLocation {
   distance?: number
 }
 
-const customIcon = new L.Icon({
+const defaultIcon = new L.Icon({
   iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTQiIGZpbGw9IiM2NjdlZWEiLz4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxMiIgcj0iNCIgZmlsbD0id2hpdGUiLz4KPC9zdmc+',
   iconSize: [32, 32],
   iconAnchor: [16, 32],
   popupAnchor: [0, -32]
 })
+
+const selectedIcon = new L.Icon({
+  iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjQiIGN5PSIyNCIgcj0iMjIiIGZpbGw9IiNmNTIyMmIiLz4KPGNpcmNsZSBjeD0iMjQiIGN5PSIyMCIgcj0iNiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTI0IDMyTDI4IDI4SDIwTDI0IDMyWiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+',
+  iconSize: [48, 48],
+  iconAnchor: [24, 48],
+  popupAnchor: [0, -48]
+})
+
+const MapController: React.FC<{ center: [number, number] | null; zoom?: number }> = ({ center, zoom = 15 }) => {
+  const map = useMap()
+  useEffect(() => {
+    if (center) {
+      map.flyTo(center, zoom, {
+        duration: 0.8,
+        easeLinearity: 0.25
+      })
+    }
+  }, [center, zoom, map])
+  return null
+}
 
 const extractCity = (location: string): string => {
   const match = location.match(/^(.+?)[市区]/)
@@ -43,6 +63,9 @@ const MapView: React.FC = () => {
   const [availableFilter, setAvailableFilter] = useState<string>('true')
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
   const [, setLoading] = useState(false)
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null)
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null)
+  const cardRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
 
   useEffect(() => {
     loadVehicles()
@@ -169,12 +192,53 @@ const MapView: React.FC = () => {
 
   const handleSearch = () => {
     loadVehicles()
+    setSelectedVehicleId(null)
   }
 
   const handlePriceChange = (values: number[]) => {
     setMinPrice(values[0])
     setMaxPrice(values[1])
   }
+
+  const handleMarkerClick = useCallback((vehicle: VehicleLocation) => {
+    setSelectedVehicleId(vehicle.id)
+    setMapCenter([vehicle.lat, vehicle.lng])
+    setTimeout(() => {
+      const cardElement = cardRefs.current.get(vehicle.id)
+      if (cardElement) {
+        cardElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+        cardElement.style.transition = 'box-shadow 0.3s, transform 0.3s'
+        cardElement.style.boxShadow = '0 8px 24px rgba(102, 126, 234, 0.4)'
+        cardElement.style.transform = 'scale(1.02)'
+        setTimeout(() => {
+          cardElement.style.boxShadow = ''
+          cardElement.style.transform = ''
+        }, 1500)
+      }
+    }, 100)
+  }, [])
+
+  const handleCardClick = useCallback((vehicle: VehicleLocation) => {
+    setSelectedVehicleId(vehicle.id)
+    setMapCenter([vehicle.lat, vehicle.lng])
+  }, [])
+
+  const setCardRef = useCallback((id: number, element: HTMLDivElement | null) => {
+    if (element) {
+      cardRefs.current.set(id, element)
+    } else {
+      cardRefs.current.delete(id)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedVehicleId) {
+      const exists = vehicles.some(v => v.id === selectedVehicleId)
+      if (!exists) {
+        setSelectedVehicleId(null)
+      }
+    }
+  }, [vehicles, selectedVehicleId])
 
   return (
     <div>
@@ -296,7 +360,7 @@ const MapView: React.FC = () => {
           <Tag
             color="blue"
             style={{ cursor: 'pointer' }}
-            onClick={() => { setSelectedCity(''); setTypeFilter(''); setSearchText('') }}
+            onClick={() => { setSelectedCity(''); setTypeFilter(''); setSearchText(''); setSelectedVehicleId(null) }}
           >
             全部
           </Tag>
@@ -305,7 +369,7 @@ const MapView: React.FC = () => {
               key={type}
               color={typeFilter === type ? 'purple' : 'default'}
               style={{ cursor: 'pointer' }}
-              onClick={() => setTypeFilter(typeFilter === type ? '' : type)}
+              onClick={() => { setTypeFilter(typeFilter === type ? '' : type); setSelectedVehicleId(null) }}
             >
               {type}
             </Tag>
@@ -319,6 +383,7 @@ const MapView: React.FC = () => {
           zoom={12}
           style={{ height: '600px', width: '100%' }}
         >
+          <MapController center={mapCenter} zoom={15} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -328,7 +393,10 @@ const MapView: React.FC = () => {
             <Marker
               key={vehicle.id}
               position={[vehicle.lat, vehicle.lng]}
-              icon={customIcon}
+              icon={selectedVehicleId === vehicle.id ? selectedIcon : defaultIcon}
+              eventHandlers={{
+                click: () => handleMarkerClick(vehicle)
+              }}
             >
               <Popup>
                 <div style={{ minWidth: '200px' }}>
@@ -361,7 +429,23 @@ const MapView: React.FC = () => {
       </Card>
 
       <Card
-        title={`附近车辆 (${vehicles.length}辆)`}
+        title={
+          <span>
+            附近车辆 ({vehicles.length}辆)
+            {selectedVehicleId && (
+              <Tag color="blue" style={{ marginLeft: '8px' }}>
+                已选中 1 辆
+              </Tag>
+            )}
+          </span>
+        }
+        extra={
+          selectedVehicleId ? (
+            <Button size="small" onClick={() => setSelectedVehicleId(null)}>
+              取消选中
+            </Button>
+          ) : null
+        }
         style={{
           marginTop: '20px',
           borderRadius: '12px',
@@ -369,28 +453,81 @@ const MapView: React.FC = () => {
         }}
       >
         <Row gutter={[16, 16]}>
-          {vehicles.slice(0, 6).map(vehicle => (
+          {vehicles.map(vehicle => (
             <Col xs={24} sm={12} lg={8} key={vehicle.id}>
-              <Card
-                hoverable
-                size="small"
-                style={{ borderRadius: '8px' }}
+              <div
+                ref={(el) => setCardRef(vehicle.id, el)}
+                onClick={() => handleCardClick(vehicle)}
+                style={{
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  border: selectedVehicleId === vehicle.id ? '2px solid #667eea' : '1px solid #f0f0f0',
+                  borderRadius: '8px',
+                  background: selectedVehicleId === vehicle.id ? 'linear-gradient(135deg, #f0f5ff 0%, #e6f0ff 100%)' : 'white',
+                  boxShadow: selectedVehicleId === vehicle.id ? '0 4px 12px rgba(102, 126, 234, 0.3)' : 'none',
+                  transform: selectedVehicleId === vehicle.id ? 'translateY(-2px)' : 'translateY(0)'
+                }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{vehicle.name}</div>
-                    <div style={{ color: '#666', fontSize: '0.875rem' }}>
-                      <EnvironmentOutlined /> {vehicle.location}
+                <Card
+                  size="small"
+                  style={{
+                    borderRadius: '8px',
+                    background: 'transparent',
+                    border: 'none'
+                  }}
+                  bodyStyle={{ padding: '12px' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        fontWeight: 'bold',
+                        marginBottom: '4px',
+                        color: selectedVehicleId === vehicle.id ? '#667eea' : '#333',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <CarOutlined style={{ fontSize: '1rem' }} />
+                        {vehicle.name}
+                      </div>
+                      <div style={{ color: '#666', fontSize: '0.875rem' }}>
+                        <EnvironmentOutlined /> {vehicle.location}
+                      </div>
+                      <div style={{ marginTop: '6px' }}>
+                        <Tag color="blue" style={{ margin: 0 }}>{vehicle.type}</Tag>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{
+                        color: '#ff4d4f',
+                        fontWeight: 'bold',
+                        fontSize: '1.125rem'
+                      }}>
+                        ¥{vehicle.price}
+                        <span style={{ fontSize: '0.75rem', color: '#999', fontWeight: 'normal' }}>/天</span>
+                      </div>
+                      <Tag
+                        color={vehicle.available ? 'green' : 'red'}
+                        style={{ marginTop: '6px' }}
+                      >
+                        {vehicle.available ? '可租' : '已租满'}
+                      </Tag>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: '#ff4d4f', fontWeight: 'bold' }}>¥{vehicle.price}</div>
-                    <Tag color={vehicle.available ? 'green' : 'red'} style={{ marginTop: '4px' }}>
-                      {vehicle.available ? '可租' : '已租满'}
-                    </Tag>
-                  </div>
-                </div>
-              </Card>
+                  {selectedVehicleId === vehicle.id && (
+                    <div style={{
+                      marginTop: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px dashed #d6e4ff',
+                      fontSize: '0.75rem',
+                      color: '#667eea',
+                      textAlign: 'center'
+                    }}>
+                      📍 地图上已定位
+                    </div>
+                  )}
+                </Card>
+              </div>
             </Col>
           ))}
         </Row>
