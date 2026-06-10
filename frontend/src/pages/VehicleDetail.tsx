@@ -27,6 +27,12 @@ interface Vehicle {
   features: string[]
 }
 
+interface RecommendItem {
+  vehicle: Vehicle
+  score: number
+  reason: string
+}
+
 const parseSpecs = (specs: string | VehicleSpecs): VehicleSpecs => {
   if (typeof specs !== 'string') return specs
   const result: VehicleSpecs = { seats: 0, transmission: '', fuel: '', year: 0 }
@@ -78,6 +84,7 @@ const VehicleDetail: React.FC = () => {
   const [dates, setDates] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [loading, setLoading] = useState(false)
   const [compareList, setCompareList] = useState<number[]>([])
+  const [recommendedVehicles, setRecommendedVehicles] = useState<RecommendItem[]>([])
 
   useEffect(() => {
     const saved = localStorage.getItem('compareList')
@@ -122,6 +129,27 @@ const VehicleDetail: React.FC = () => {
   useEffect(() => {
     loadVehicle()
   }, [id])
+
+  useEffect(() => {
+    if (id) {
+      loadRecommendations()
+    }
+  }, [id])
+
+  const loadRecommendations = async () => {
+    try {
+      const response = await axios.get(`/api/recommend/vehicle-detail?vehicleId=${id}&limit=4`)
+      const data = response.data?.data || response.data
+      if (Array.isArray(data) && data.length > 0) {
+        setRecommendedVehicles(data)
+      } else {
+        throw new Error('No data')
+      }
+    } catch {
+      const fallback = mockVehicles.filter(v => v.id !== Number(id)).slice(0, 4)
+      setRecommendedVehicles(fallback.map(v => ({ vehicle: v, score: 50, reason: '综合评分推荐' })))
+    }
+  }
 
   const loadVehicle = async () => {
     try {
@@ -366,6 +394,52 @@ const VehicleDetail: React.FC = () => {
           </Col>
         </Row>
       </Card>
+
+      {recommendedVehicles.length > 0 && (
+        <Card
+          style={{ marginTop: '24px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+          title={<span style={{ fontSize: '1.5rem', fontWeight: 600 }}>猜你喜欢</span>}
+        >
+          <Row gutter={[16, 16]}>
+            {recommendedVehicles.map(item => (
+              <Col xs={24} sm={12} md={6} key={item.vehicle.id}>
+                <Link to={`/vehicles/${item.vehicle.id}`} style={{ textDecoration: 'none' }}>
+                  <div
+                    style={{
+                      background: '#f8f9fa',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      height: '100%',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-4px)'
+                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = 'none'
+                    }}
+                  >
+                    <div style={{ fontSize: '2.5rem', textAlign: 'center', marginBottom: '8px' }}>🚗</div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#333' }}>{item.vehicle.name}</h4>
+                    <div style={{ color: '#ff4d4f', fontWeight: 'bold', marginBottom: '4px' }}>¥{item.vehicle.price}/天</div>
+                    <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '4px' }}>
+                      {item.vehicle.type} · ⭐ {item.vehicle.rating}
+                    </div>
+                    {item.reason && (
+                      <div style={{ fontSize: '0.75rem', color: '#667eea', background: '#f0f2ff', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>
+                        💡 {item.reason}
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              </Col>
+            ))}
+          </Row>
+        </Card>
+      )}
     </div>
   )
 }

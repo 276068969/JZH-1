@@ -16,6 +16,12 @@ interface Vehicle {
   rating: number
 }
 
+interface RecommendItem {
+  vehicle: Vehicle
+  score: number
+  reason: string
+}
+
 const extractCity = (location: string): string => {
   const match = location.match(/^(.+?)[市区]/)
   return match ? match[1] : location
@@ -24,11 +30,13 @@ const extractCity = (location: string): string => {
 const Home: React.FC = () => {
   const navigate = useNavigate()
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [recommendedVehicles, setRecommendedVehicles] = useState<RecommendItem[]>([])
   const [searchText, setSearchText] = useState('')
   const [selectedCity, setSelectedCity] = useState<string>('all')
 
   useEffect(() => {
     loadVehicles()
+    loadRecommendations()
   }, [])
 
   const loadVehicles = async () => {
@@ -52,6 +60,29 @@ const Home: React.FC = () => {
         { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', available: true, rating: 4.7 },
         { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', available: true, rating: 4.6 },
       ])
+    }
+  }
+
+  const loadRecommendations = async () => {
+    try {
+      const response = await axios.get('/api/recommend/home?limit=6')
+      const data = response.data?.data || response.data
+      if (Array.isArray(data) && data.length > 0) {
+        setRecommendedVehicles(data)
+      } else {
+        throw new Error('No data')
+      }
+    } catch {
+      setRecommendedVehicles(
+        [
+          { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', available: true, rating: 4.8 },
+          { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', available: true, rating: 4.9 },
+          { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', available: true, rating: 4.7 },
+          { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', available: true, rating: 5.0 },
+          { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', available: true, rating: 4.8 },
+          { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', available: true, rating: 4.7 },
+        ].map(v => ({ vehicle: v, score: 50, reason: '综合评分推荐' }))
+      )
     }
   }
 
@@ -235,7 +266,7 @@ const Home: React.FC = () => {
 
       <div style={{ background: 'white', padding: '32px', borderRadius: '12px', marginTop: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '2rem', margin: 0, color: '#333' }}>热门推荐</h2>
+          <h2 style={{ fontSize: '2rem', margin: 0, color: '#333' }}>为你推荐</h2>
           <Link
             to={selectedCity !== 'all' ? `/vehicles?city=${selectedCity}` : '/vehicles'}
             style={{ color: '#667eea', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -244,13 +275,13 @@ const Home: React.FC = () => {
           </Link>
         </div>
         <div className="vehicle-grid">
-          {filteredVehicles.slice(0, 6).map(vehicle => (
-            <Link to={`/vehicles/${vehicle.id}`} key={vehicle.id} style={{ textDecoration: 'none' }}>
+          {recommendedVehicles.slice(0, 6).map(item => (
+            <Link to={`/vehicles/${item.vehicle.id}`} key={item.vehicle.id} style={{ textDecoration: 'none' }}>
               <div className="vehicle-card">
                 <div className="vehicle-image">🚗</div>
                 <div className="vehicle-info">
-                  <h3>{vehicle.name}</h3>
-                  <div className="price">¥{vehicle.price}/天</div>
+                  <h3>{item.vehicle.name}</h3>
+                  <div className="price">¥{item.vehicle.price}/天</div>
                   <div className="tags">
                     <span
                       style={{
@@ -264,10 +295,10 @@ const Home: React.FC = () => {
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        goToVehicleList(vehicle.type)
+                        goToVehicleList(item.vehicle.type)
                       }}
                     >
-                      {vehicle.type}
+                      {item.vehicle.type}
                     </span>
                     <span style={{
                       background: '#f6ffed',
@@ -276,12 +307,17 @@ const Home: React.FC = () => {
                       borderRadius: '4px',
                       fontSize: '0.875rem'
                     }}>
-                      ⭐ {vehicle.rating}
+                      ⭐ {item.vehicle.rating}
                     </span>
                   </div>
                   <p style={{ marginTop: '12px', color: '#666', fontSize: '0.875rem' }}>
-                    📍 {vehicle.location}
+                    📍 {item.vehicle.location}
                   </p>
+                  {item.reason && (
+                    <p style={{ marginTop: '4px', color: '#667eea', fontSize: '0.75rem', background: '#f0f2ff', padding: '2px 8px', borderRadius: '4px', display: 'inline-block' }}>
+                      💡 {item.reason}
+                    </p>
+                  )}
                 </div>
               </div>
             </Link>
