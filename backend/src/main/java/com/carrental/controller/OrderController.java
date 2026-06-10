@@ -1,5 +1,6 @@
 package com.carrental.controller;
 
+import com.carrental.config.JwtAuthHelper;
 import com.carrental.dto.OrderDTO;
 import com.carrental.entity.Order;
 import com.carrental.service.OrderService;
@@ -23,21 +24,36 @@ public class OrderController {
     @Autowired
     private VehicleService vehicleService;
 
+    @Autowired
+    private JwtAuthHelper jwtAuthHelper;
+
     @PostMapping
     public ResponseEntity<?> createOrder(@RequestBody Map<String, Object> params) {
         try {
+            Long userId = jwtAuthHelper.getCurrentUserIdRequired();
+
             Long vehicleId = Long.valueOf(params.get("vehicleId").toString());
             String startDate = params.get("startDate").toString();
             String endDate = params.get("endDate").toString();
             Double totalPrice = Double.valueOf(params.get("totalPrice").toString());
 
-            Order order = orderService.createOrder(1L, vehicleId, startDate, endDate, totalPrice);
+            Order order = orderService.createOrder(userId, vehicleId, startDate, endDate, totalPrice);
 
             Map<String, Object> response = new HashMap<>();
             response.put("code", 200);
             response.put("message", "订单创建成功");
             response.put("data", order);
 
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> response = new HashMap<>();
+            if (e.getMessage().contains("未登录")) {
+                response.put("code", 401);
+                response.put("message", e.getMessage());
+                return ResponseEntity.status(401).body(response);
+            }
+            response.put("code", 500);
+            response.put("message", e.getMessage());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -49,13 +65,27 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<?> getOrders() {
-        List<OrderDTO> orders = orderService.getUserOrderDTOs(1L);
+        try {
+            Long userId = jwtAuthHelper.getCurrentUserIdRequired();
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("code", 200);
-        response.put("data", orders);
+            List<OrderDTO> orders = orderService.getUserOrderDTOs(userId);
 
-        return ResponseEntity.ok(response);
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("data", orders);
+
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> response = new HashMap<>();
+            if (e.getMessage().contains("未登录")) {
+                response.put("code", 401);
+                response.put("message", e.getMessage());
+                return ResponseEntity.status(401).body(response);
+            }
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        }
     }
 
     @DeleteMapping("/{id}")

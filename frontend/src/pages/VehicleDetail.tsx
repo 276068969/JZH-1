@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { Card, Button, Row, Col, DatePicker, message, Descriptions, Rate, Tabs, Tag } from 'antd'
-import { EnvironmentOutlined, UserOutlined, CarOutlined, CheckCircleOutlined, SwapOutlined } from '@ant-design/icons'
+import { Card, Button, Row, Col, DatePicker, message, Descriptions, Rate, Tabs, Tag, Alert, Spin } from 'antd'
+import { EnvironmentOutlined, UserOutlined, CarOutlined, CheckCircleOutlined, SwapOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
 
@@ -65,26 +65,18 @@ const parseFeatures = (features: string | string[]): string[] => {
   return []
 }
 
-const mockVehicles: Vehicle[] = [
-  { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', available: true, rating: 4.8, description: '高性能纯电动轿车，续航500公里，搭载自动驾驶系统', specs: { seats: 5, transmission: '自动', fuel: '纯电动', year: 2024 }, features: ['自动驾驶', '全景天窗', '智能互联', '快速充电', '辅助泊车', 'OTA升级'] },
-  { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', available: true, rating: 4.9, description: '豪华商务轿车，舒适驾乘体验', specs: { seats: 5, transmission: '自动', fuel: '汽油', year: 2024 }, features: ['真皮座椅', '导航系统', '全景天窗', '氛围灯', '哈曼卡顿音响'] },
-  { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', available: true, rating: 4.7, description: '科技感十足的豪华轿车', specs: { seats: 5, transmission: '自动', fuel: '汽油', year: 2024 }, features: ['虚拟座舱', '矩阵大灯', '四驱系统', '空气悬架'] },
-  { id: 4, name: '奔驰 E级', type: '轿车', price: 429, location: '深圳市南山区', available: true, rating: 4.9, description: '尊贵舒适的商务座驾', specs: { seats: 5, transmission: '自动', fuel: '汽油', year: 2024 }, features: ['柏林之声', '香氛系统', '氛围灯', '魔术车身控制'] },
-  { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', available: true, rating: 5.0, description: '极致驾驶体验，澎湃动力', specs: { seats: 2, transmission: '自动', fuel: '汽油', year: 2024 }, features: ['运动排气', '碳陶瓷刹车', 'Sport Chrono组件', '动力转向升级'] },
-  { id: 6, name: '大众 途观L', type: 'SUV', price: 259, location: '成都市高新区', available: true, rating: 4.6, description: '家庭出行首选，宽敞空间', specs: { seats: 7, transmission: '自动', fuel: '汽油', year: 2024 }, features: ['全景天窗', '四驱系统', 'ACC自适应巡航', '自动泊车'] },
-  { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', available: true, rating: 4.8, description: '明星保姆车，豪华舒适', specs: { seats: 7, transmission: '自动', fuel: '汽油', year: 2024 }, features: ['航空座椅', '隔音玻璃', '车载冰箱', '后排娱乐系统'] },
-  { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', available: true, rating: 4.7, description: '智能电动SUV', specs: { seats: 6, transmission: '自动', fuel: '纯电动', year: 2024 }, features: ['NOMI助手', '换电服务', '自动驾驶', '女王副驾'] },
-  { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', available: true, rating: 4.6, description: '全能城市SUV', specs: { seats: 5, transmission: '自动', fuel: '汽油', year: 2024 }, features: ['quattro四驱', '虚拟座舱', '矩阵大灯', '全景影像'] },
-]
-
 const VehicleDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
   const [dates, setDates] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [loading, setLoading] = useState(false)
+  const [vehicleLoading, setVehicleLoading] = useState(true)
+  const [vehicleError, setVehicleError] = useState<string | null>(null)
   const [compareList, setCompareList] = useState<number[]>([])
   const [recommendedVehicles, setRecommendedVehicles] = useState<RecommendItem[]>([])
+  const [recommendLoading, setRecommendLoading] = useState(true)
+  const [recommendError, setRecommendError] = useState<string | null>(null)
 
   useEffect(() => {
     const saved = localStorage.getItem('compareList')
@@ -137,21 +129,30 @@ const VehicleDetail: React.FC = () => {
   }, [id])
 
   const loadRecommendations = async () => {
+    setRecommendLoading(true)
+    setRecommendError(null)
     try {
       const response = await axios.get(`/api/recommend/vehicle-detail?vehicleId=${id}&limit=4`)
       const data = response.data?.data || response.data
       if (Array.isArray(data) && data.length > 0) {
         setRecommendedVehicles(data)
       } else {
-        throw new Error('No data')
+        setRecommendError('暂无推荐数据')
       }
-    } catch {
-      const fallback = mockVehicles.filter(v => v.id !== Number(id)).slice(0, 4)
-      setRecommendedVehicles(fallback.map(v => ({ vehicle: v, score: 50, reason: '综合评分推荐' })))
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        setRecommendError('请先登录以获取个性化推荐')
+      } else {
+        setRecommendError(error.response?.data?.message || '加载推荐失败，请稍后重试')
+      }
+    } finally {
+      setRecommendLoading(false)
     }
   }
 
   const loadVehicle = async () => {
+    setVehicleLoading(true)
+    setVehicleError(null)
     try {
       const response = await axios.get(`/api/vehicles/${id}`)
       const data = response.data?.data || response.data
@@ -162,15 +163,12 @@ const VehicleDetail: React.FC = () => {
           features: parseFeatures(data.features)
         })
       } else {
-        throw new Error('No data')
+        setVehicleError('车辆信息不存在')
       }
-    } catch (error) {
-      const mock = mockVehicles.find(v => v.id === Number(id))
-      if (mock) {
-        setVehicle(mock)
-      } else {
-        setVehicle(mockVehicles[0])
-      }
+    } catch (error: any) {
+      setVehicleError(error.response?.data?.message || '加载车辆信息失败，请稍后重试')
+    } finally {
+      setVehicleLoading(false)
     }
   }
 
@@ -186,26 +184,68 @@ const VehicleDetail: React.FC = () => {
       return
     }
 
+    const token = localStorage.getItem('token')
+    if (!token) {
+      message.warning('请先登录后再租车')
+      navigate('/login')
+      return
+    }
+
     setLoading(true)
     try {
-      await axios.post('/api/orders', {
+      const response = await axios.post('/api/orders', {
         vehicleId: id,
         startDate: dates[0].format('YYYY-MM-DD'),
         endDate: dates[1].format('YYYY-MM-DD'),
         totalPrice: calculatePrice()
       })
-      message.success('订单提交成功！')
-      navigate('/orders')
-    } catch (error) {
-      message.success('订单提交成功！')
-      navigate('/orders')
+      if (response.data?.code === 200) {
+        message.success('订单提交成功！')
+        navigate('/orders')
+      } else {
+        message.error(response.data?.message || '订单提交失败')
+      }
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        message.error('登录已过期，请重新登录')
+        navigate('/login')
+      } else {
+        message.error(error.response?.data?.message || '订单提交失败，请稍后重试')
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  if (!vehicle) {
-    return <div>加载中...</div>
+  if (vehicleLoading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 0' }}>
+        <Spin size="large" tip="加载车辆信息..." />
+      </div>
+    )
+  }
+
+  if (vehicleError || !vehicle) {
+    return (
+      <div style={{ maxWidth: '600px', margin: '80px auto' }}>
+        <Alert
+          message="加载失败"
+          description={vehicleError || '未找到该车辆信息'}
+          type="error"
+          showIcon
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={loadVehicle}>
+              重试
+            </Button>
+          }
+        />
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <Button type="primary" onClick={() => navigate('/vehicles')}>
+            返回车辆列表
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -395,11 +435,46 @@ const VehicleDetail: React.FC = () => {
         </Row>
       </Card>
 
-      {recommendedVehicles.length > 0 && (
-        <Card
-          style={{ marginTop: '24px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-          title={<span style={{ fontSize: '1.5rem', fontWeight: 600 }}>猜你喜欢</span>}
-        >
+      <Card
+        style={{ marginTop: '24px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+        title={<span style={{ fontSize: '1.5rem', fontWeight: 600 }}>猜你喜欢</span>}
+      >
+        {recommendLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size="large" tip="正在加载推荐..." />
+          </div>
+        ) : recommendError ? (
+          <Alert
+            message={recommendError}
+            description={recommendError.includes('登录') ? '登录后即可根据您的历史租车记录和偏好获取个性化车辆推荐' : '请检查网络连接后重试'}
+            type={recommendError.includes('登录') ? 'warning' : 'error'}
+            showIcon
+            icon={recommendError.includes('登录') ? <LoginOutlined /> : undefined}
+            action={
+              recommendError.includes('登录') ? (
+                <Button size="small" type="primary" onClick={() => navigate('/login')}>
+                  去登录
+                </Button>
+              ) : (
+                <Button size="small" onClick={loadRecommendations}>
+                  重试
+                </Button>
+              )
+            }
+          />
+        ) : recommendedVehicles.length === 0 ? (
+          <Alert
+            message="暂无推荐结果"
+            description="系统暂时无法为您生成推荐，请浏览全部车辆"
+            type="info"
+            showIcon
+            action={
+              <Button size="small" onClick={() => navigate('/vehicles')}>
+                浏览全部
+              </Button>
+            }
+          />
+        ) : (
           <Row gutter={[16, 16]}>
             {recommendedVehicles.map(item => (
               <Col xs={24} sm={12} md={6} key={item.vehicle.id}>
@@ -438,8 +513,8 @@ const VehicleDetail: React.FC = () => {
               </Col>
             ))}
           </Row>
-        </Card>
-      )}
+        )}
+      </Card>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, Table, Tag, Button, Modal, message, Tabs, Descriptions, Radio, DatePicker, Alert, Divider } from 'antd'
 import {
   EnvironmentOutlined,
@@ -46,8 +47,10 @@ interface RenewCheckResult {
 }
 
 const Orders: React.FC = () => {
+  const navigate = useNavigate()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(false)
+  const [ordersError, setOrdersError] = useState<string | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [viewMode, setViewMode] = useState<'timeline' | 'table'>('timeline')
   const [renewModalVisible, setRenewModalVisible] = useState(false)
@@ -63,10 +66,15 @@ const Orders: React.FC = () => {
 
   const loadOrders = async () => {
     setLoading(true)
+    setOrdersError(null)
     try {
       const response = await axios.get('/api/orders')
+      if (response.data?.code === 401) {
+        setOrdersError('登录已过期，请重新登录')
+        return
+      }
       const data = response.data?.data || response.data
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         const mappedOrders = data.map((item: any) => ({
           id: item.id,
           vehicleId: item.vehicleId,
@@ -85,75 +93,14 @@ const Orders: React.FC = () => {
         }))
         setOrders(mappedOrders)
       } else {
-        throw new Error('No data')
+        setOrdersError('暂无订单数据')
       }
-    } catch (error) {
-      setOrders([
-        {
-          id: 1,
-          vehicleId: 1,
-          vehicleName: '特斯拉 Model 3',
-          vehicleType: '电动车',
-          vehicleLocation: '北京朝阳区',
-          vehiclePrice: 299,
-          vehicleRating: 4.8,
-          vehicleDescription: '高性能纯电动轿车，续航556公里',
-          startDate: '2026-06-08T10:00:00',
-          endDate: '2026-06-13T18:00:00',
-          totalPrice: 1495,
-          status: 'active',
-          renewCount: 0,
-          createTime: '2026-06-05 10:30:00'
-        },
-        {
-          id: 2,
-          vehicleId: 2,
-          vehicleName: '宝马 5系',
-          vehicleType: '豪华轿车',
-          vehicleLocation: '北京海淀区',
-          vehiclePrice: 399,
-          vehicleRating: 4.9,
-          vehicleDescription: '豪华商务轿车，舒适驾乘体验',
-          startDate: '2026-06-11T09:00:00',
-          endDate: '2026-06-16T18:00:00',
-          totalPrice: 1995,
-          status: 'pending',
-          renewCount: 1,
-          createTime: '2026-06-07 15:20:00'
-        },
-        {
-          id: 3,
-          vehicleId: 3,
-          vehicleName: '保时捷 911',
-          vehicleType: '跑车',
-          vehicleLocation: '北京国贸',
-          vehiclePrice: 1299,
-          vehicleRating: 4.9,
-          vehicleDescription: '经典跑车，极致驾驶乐趣',
-          startDate: '2026-06-24T10:00:00',
-          endDate: '2026-06-27T18:00:00',
-          totalPrice: 3897,
-          status: 'pending',
-          renewCount: 0,
-          createTime: '2026-06-04 09:15:00'
-        },
-        {
-          id: 4,
-          vehicleId: 1,
-          vehicleName: '特斯拉 Model 3',
-          vehicleType: '电动车',
-          vehicleLocation: '北京朝阳区',
-          vehiclePrice: 299,
-          vehicleRating: 4.8,
-          vehicleDescription: '高性能纯电动轿车，续航556公里',
-          startDate: '2026-05-20T10:00:00',
-          endDate: '2026-05-25T18:00:00',
-          totalPrice: 1495,
-          status: 'completed',
-          renewCount: 2,
-          createTime: '2026-05-18 10:30:00'
-        }
-      ])
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        setOrdersError('登录已过期，请重新登录')
+      } else {
+        setOrdersError(error.response?.data?.message || '加载订单失败，请稍后重试')
+      }
     } finally {
       setLoading(false)
     }
@@ -168,9 +115,8 @@ const Orders: React.FC = () => {
           await axios.delete(`/api/orders/${orderId}`)
           message.success('订单已取消')
           loadOrders()
-        } catch (error) {
-          message.success('订单已取消')
-          loadOrders()
+        } catch (error: any) {
+          message.error(error.response?.data?.message || '取消订单失败')
         }
       }
     })
@@ -391,7 +337,25 @@ const Orders: React.FC = () => {
         style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
         bodyStyle={{ padding: '24px' }}
       >
-        {viewMode === 'timeline' ? (
+        {ordersError ? (
+          <Alert
+            message={ordersError}
+            description={ordersError.includes('登录') ? '请重新登录后查看订单' : '请检查网络连接后重试'}
+            type={ordersError.includes('登录') ? 'warning' : 'error'}
+            showIcon
+            action={
+              ordersError.includes('登录') ? (
+                <Button size="small" type="primary" onClick={() => navigate('/login')}>
+                  去登录
+                </Button>
+              ) : (
+                <Button size="small" onClick={loadOrders}>
+                  重试
+                </Button>
+              )
+            }
+          />
+        ) : viewMode === 'timeline' ? (
           <OrderTimeline
             orders={timelineOrders}
             loading={loading}

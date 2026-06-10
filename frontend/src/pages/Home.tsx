@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Input, Select, Button, Card, Row, Col, Statistic } from 'antd'
-import { SearchOutlined, CarOutlined, EnvironmentOutlined, SafetyOutlined, DollarOutlined, RightOutlined } from '@ant-design/icons'
+import { Input, Select, Button, Card, Row, Col, Statistic, Alert, Spin } from 'antd'
+import { SearchOutlined, CarOutlined, EnvironmentOutlined, SafetyOutlined, DollarOutlined, RightOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
 const { Search } = Input
@@ -33,6 +33,10 @@ const Home: React.FC = () => {
   const [recommendedVehicles, setRecommendedVehicles] = useState<RecommendItem[]>([])
   const [searchText, setSearchText] = useState('')
   const [selectedCity, setSelectedCity] = useState<string>('all')
+  const [vehiclesError, setVehiclesError] = useState<string | null>(null)
+  const [recommendError, setRecommendError] = useState<string | null>(null)
+  const [vehiclesLoading, setVehiclesLoading] = useState(true)
+  const [recommendLoading, setRecommendLoading] = useState(true)
 
   useEffect(() => {
     loadVehicles()
@@ -40,49 +44,42 @@ const Home: React.FC = () => {
   }, [])
 
   const loadVehicles = async () => {
+    setVehiclesLoading(true)
+    setVehiclesError(null)
     try {
       const response = await axios.get('/api/vehicles')
       const data = response.data?.data || response.data
       if (Array.isArray(data) && data.length > 0) {
         setVehicles(data)
       } else {
-        throw new Error('No data')
+        setVehiclesError('暂无可用车辆数据')
       }
-    } catch (error) {
-      setVehicles([
-        { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', available: true, rating: 4.8 },
-        { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', available: true, rating: 4.9 },
-        { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', available: true, rating: 4.7 },
-        { id: 4, name: '奔驰 E级', type: '轿车', price: 429, location: '深圳市南山区', available: true, rating: 4.9 },
-        { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', available: true, rating: 5.0 },
-        { id: 6, name: '大众 途观L', type: 'SUV', price: 259, location: '成都市高新区', available: true, rating: 4.6 },
-        { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', available: true, rating: 4.8 },
-        { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', available: true, rating: 4.7 },
-        { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', available: true, rating: 4.6 },
-      ])
+    } catch (error: any) {
+      setVehiclesError(error.response?.data?.message || '加载车辆列表失败，请稍后重试')
+    } finally {
+      setVehiclesLoading(false)
     }
   }
 
   const loadRecommendations = async () => {
+    setRecommendLoading(true)
+    setRecommendError(null)
     try {
       const response = await axios.get('/api/recommend/home?limit=6')
       const data = response.data?.data || response.data
       if (Array.isArray(data) && data.length > 0) {
         setRecommendedVehicles(data)
       } else {
-        throw new Error('No data')
+        setRecommendError('暂无推荐数据')
       }
-    } catch {
-      setRecommendedVehicles(
-        [
-          { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', available: true, rating: 4.8 },
-          { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', available: true, rating: 4.9 },
-          { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', available: true, rating: 4.7 },
-          { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', available: true, rating: 5.0 },
-          { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', available: true, rating: 4.8 },
-          { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', available: true, rating: 4.7 },
-        ].map(v => ({ vehicle: v, score: 50, reason: '综合评分推荐' }))
-      )
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        setRecommendError('请先登录以获取个性化推荐')
+      } else {
+        setRecommendError(error.response?.data?.message || '加载推荐失败，请稍后重试')
+      }
+    } finally {
+      setRecommendLoading(false)
     }
   }
 
@@ -117,6 +114,109 @@ const Home: React.FC = () => {
     { title: '商务接待', desc: '豪华轿车车队，专业司机服务', type: '轿车', icon: '🚌', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
     { title: '家庭出游', desc: '宽敞SUV和MPV，满足全家出行需求', type: 'SUV', icon: '🚐', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
   ]
+
+  const renderRecommendContent = () => {
+    if (recommendLoading) {
+      return (
+        <div style={{ textAlign: 'center', padding: '60px 0' }}>
+          <Spin size="large" tip="正在为您生成个性化推荐..." />
+        </div>
+      )
+    }
+
+    if (recommendError) {
+      const isAuthError = recommendError.includes('登录')
+      return (
+        <Alert
+          message={recommendError}
+          description={isAuthError ? '登录后即可根据您的历史租车记录和偏好获取个性化车辆推荐' : '请检查网络连接后重试'}
+          type={isAuthError ? 'warning' : 'error'}
+          showIcon
+          icon={isAuthError ? <LoginOutlined /> : undefined}
+          action={
+            isAuthError ? (
+              <Button size="small" type="primary" onClick={() => navigate('/login')}>
+                去登录
+              </Button>
+            ) : (
+              <Button size="small" onClick={loadRecommendations}>
+                重试
+              </Button>
+            )
+          }
+          style={{ marginBottom: '16px' }}
+        />
+      )
+    }
+
+    if (recommendedVehicles.length === 0) {
+      return (
+        <Alert
+          message="暂无推荐结果"
+          description="系统暂时无法为您生成推荐，请浏览全部车辆"
+          type="info"
+          showIcon
+          action={
+            <Button size="small" onClick={() => navigate('/vehicles')}>
+              浏览全部
+            </Button>
+          }
+        />
+      )
+    }
+
+    return (
+      <div className="vehicle-grid">
+        {recommendedVehicles.slice(0, 6).map(item => (
+          <Link to={`/vehicles/${item.vehicle.id}`} key={item.vehicle.id} style={{ textDecoration: 'none' }}>
+            <div className="vehicle-card">
+              <div className="vehicle-image">🚗</div>
+              <div className="vehicle-info">
+                <h3>{item.vehicle.name}</h3>
+                <div className="price">¥{item.vehicle.price}/天</div>
+                <div className="tags">
+                  <span
+                    style={{
+                      background: '#e6f7ff',
+                      color: '#1890ff',
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      cursor: 'pointer'
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      goToVehicleList(item.vehicle.type)
+                    }}
+                  >
+                    {item.vehicle.type}
+                  </span>
+                  <span style={{
+                    background: '#f6ffed',
+                    color: '#52c41a',
+                    padding: '4px 12px',
+                    borderRadius: '4px',
+                    fontSize: '0.875rem'
+                  }}>
+                    ⭐ {item.vehicle.rating}
+                  </span>
+                </div>
+                <p style={{ marginTop: '12px', color: '#666', fontSize: '0.875rem' }}>
+                  📍 {item.vehicle.location}
+                </p>
+                {item.reason && (
+                  <p style={{ marginTop: '4px', color: '#667eea', fontSize: '0.75rem', background: '#f0f2ff', padding: '2px 8px', borderRadius: '4px', display: 'inline-block' }}>
+                    💡 {item.reason}
+                  </p>
+                )}
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -167,50 +267,68 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      <Row gutter={[24, 24]} className="statistics">
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="可用车辆"
-              value={vehicles.length}
-              prefix={<CarOutlined style={{ color: '#667eea' }} />}
-              valueStyle={{ color: '#667eea' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="覆盖城市"
-              value={cities.length - 1}
-              prefix={<EnvironmentOutlined style={{ color: '#764ba2' }} />}
-              valueStyle={{ color: '#764ba2' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="安全里程"
-              value={1000000}
-              suffix="公里"
-              prefix={<SafetyOutlined style={{ color: '#667eea' }} />}
-              valueStyle={{ color: '#667eea' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="用户好评"
-              value={98}
-              suffix="%"
-              prefix={<DollarOutlined style={{ color: '#764ba2' }} />}
-              valueStyle={{ color: '#764ba2' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      {vehiclesLoading ? (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <Spin size="large" />
+        </div>
+      ) : vehiclesError ? (
+        <Alert
+          message={vehiclesError}
+          type="error"
+          showIcon
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={loadVehicles}>
+              重试
+            </Button>
+          }
+          style={{ marginBottom: '24px' }}
+        />
+      ) : (
+        <Row gutter={[24, 24]} className="statistics">
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="可用车辆"
+                value={vehicles.length}
+                prefix={<CarOutlined style={{ color: '#667eea' }} />}
+                valueStyle={{ color: '#667eea' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="覆盖城市"
+                value={cities.length - 1}
+                prefix={<EnvironmentOutlined style={{ color: '#764ba2' }} />}
+                valueStyle={{ color: '#764ba2' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="安全里程"
+                value={1000000}
+                suffix="公里"
+                prefix={<SafetyOutlined style={{ color: '#667eea' }} />}
+                valueStyle={{ color: '#667eea' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="用户好评"
+                value={98}
+                suffix="%"
+                prefix={<DollarOutlined style={{ color: '#764ba2' }} />}
+                valueStyle={{ color: '#764ba2' }}
+              />
+            </Card>
+          </Col>
+        </Row>
+      )}
 
       <div style={{ marginTop: '32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
@@ -264,55 +382,7 @@ const Home: React.FC = () => {
             查看更多 <RightOutlined style={{ fontSize: '0.75rem' }} />
           </Link>
         </div>
-        <div className="vehicle-grid">
-          {recommendedVehicles.slice(0, 6).map(item => (
-            <Link to={`/vehicles/${item.vehicle.id}`} key={item.vehicle.id} style={{ textDecoration: 'none' }}>
-              <div className="vehicle-card">
-                <div className="vehicle-image">🚗</div>
-                <div className="vehicle-info">
-                  <h3>{item.vehicle.name}</h3>
-                  <div className="price">¥{item.vehicle.price}/天</div>
-                  <div className="tags">
-                    <span
-                      style={{
-                        background: '#e6f7ff',
-                        color: '#1890ff',
-                        padding: '4px 12px',
-                        borderRadius: '4px',
-                        fontSize: '0.875rem',
-                        cursor: 'pointer'
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        goToVehicleList(item.vehicle.type)
-                      }}
-                    >
-                      {item.vehicle.type}
-                    </span>
-                    <span style={{
-                      background: '#f6ffed',
-                      color: '#52c41a',
-                      padding: '4px 12px',
-                      borderRadius: '4px',
-                      fontSize: '0.875rem'
-                    }}>
-                      ⭐ {item.vehicle.rating}
-                    </span>
-                  </div>
-                  <p style={{ marginTop: '12px', color: '#666', fontSize: '0.875rem' }}>
-                    📍 {item.vehicle.location}
-                  </p>
-                  {item.reason && (
-                    <p style={{ marginTop: '4px', color: '#667eea', fontSize: '0.75rem', background: '#f0f2ff', padding: '2px 8px', borderRadius: '4px', display: 'inline-block' }}>
-                      💡 {item.reason}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {renderRecommendContent()}
       </div>
 
       <div style={{ marginTop: '40px' }}>

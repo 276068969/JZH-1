@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
+import axios from 'axios'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import VehicleList from './pages/VehicleList'
@@ -13,13 +14,28 @@ import Orders from './pages/Orders'
 import MapView from './pages/MapView'
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('token'))
+
+  useEffect(() => {
+    const interceptor = axios.interceptors.request.use((config) => {
+      const token = localStorage.getItem('token')
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+      return config
+    })
+
+    return () => {
+      axios.interceptors.request.eject(interceptor)
+    }
+  }, [])
 
   const handleLogin = () => {
     setIsAuthenticated(true)
   }
 
   const handleLogout = () => {
+    localStorage.removeItem('token')
     setIsAuthenticated(false)
   }
 
