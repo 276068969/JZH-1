@@ -5,7 +5,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.carrental.dto.VehicleSearchRequest;
 import com.carrental.entity.Vehicle;
 import com.carrental.mapper.VehicleMapper;
+import com.carrental.service.OrderService;
 import com.carrental.service.VehicleService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -18,8 +21,14 @@ import java.util.stream.Collectors;
 @Service
 public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> implements VehicleService {
 
+    @Autowired
+    @Lazy
+    private OrderService orderService;
+
     @Override
     public List<Vehicle> getAvailableVehicles() {
+        orderService.refreshAllPendingOrders();
+
         LambdaQueryWrapper<Vehicle> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Vehicle::getAvailable, true);
         List<Vehicle> vehicles = this.list(wrapper);
@@ -32,6 +41,8 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
 
     @Override
     public Vehicle getVehicleById(Long id) {
+        orderService.refreshAllPendingOrders();
+
         Vehicle vehicle = this.getById(id);
         if (vehicle == null) {
             vehicle = getMockVehicleById(id);
@@ -48,6 +59,8 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
 
     @Override
     public List<Vehicle> searchVehicles(VehicleSearchRequest request) {
+        orderService.refreshAllPendingOrders();
+
         LambdaQueryWrapper<Vehicle> wrapper = new LambdaQueryWrapper<>();
 
         if (request.getKeyword() != null && !request.getKeyword().isEmpty()) {
@@ -347,6 +360,8 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
 
     @Override
     public List<Vehicle> getVehiclesByIds(List<Long> ids) {
+        orderService.refreshAllPendingOrders();
+
         List<Vehicle> vehicles = this.listByIds(ids);
         if (vehicles.isEmpty()) {
             return getMockVehiclesByIds(ids);

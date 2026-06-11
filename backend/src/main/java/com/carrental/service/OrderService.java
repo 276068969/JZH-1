@@ -15,4 +15,5 @@ public interface OrderService extends IService<Order> {
     Order renewOrder(Long orderId, String newEndDate);
     Order cancelOrder(Long orderId, Long userId);
     void refreshOrderStatus(Order order);
+    void refreshAllPendingOrders();
 }

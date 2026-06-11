@@ -266,6 +266,22 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
+    @Override
+    @Transactional
+    public void refreshAllPendingOrders() {
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(Order::getStatus, Arrays.asList("pending", "active"));
+        List<Order> pendingOrders = this.list(wrapper);
+
+        if (pendingOrders == null || pendingOrders.isEmpty()) {
+            return;
+        }
+
+        for (Order order : pendingOrders) {
+            refreshOrderStatus(order);
+        }
+    }
+
     private boolean isVehicleAvailableForRenew(Long vehicleId, Long currentOrderId,
                                                LocalDateTime periodStart, LocalDateTime periodEnd) {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
