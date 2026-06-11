@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import { Card, Row, Col, Select, Input, Button, Tag, Slider, Alert } from 'antd'
-import { EnvironmentOutlined, SearchOutlined, FilterOutlined, CarOutlined, AimOutlined, SortAscendingOutlined, TrophyOutlined, ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { EnvironmentOutlined, SearchOutlined, FilterOutlined, CarOutlined, AimOutlined, SortAscendingOutlined, TrophyOutlined, ReloadOutlined, ExclamationCircleOutlined, InfoCircleOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import L from 'leaflet'
 import axios from 'axios'
 
@@ -101,9 +101,16 @@ const MapView: React.FC = () => {
   const [, setLoading] = useState(false)
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null)
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null)
+  const [isDemoData, setIsDemoData] = useState(false)
   const cardRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
 
   const hasRealLocation = userLocation !== null && !locationFailed
+
+  const hasActiveFilter = useMemo(() => {
+    return !!(selectedCity || searchText || typeFilter || minPrice > 0 || maxPrice < 2000 || availableFilter !== 'true')
+  }, [selectedCity, searchText, typeFilter, minPrice, maxPrice, availableFilter])
+
+  const shouldShowEmptyGuide = isDemoData && !hasActiveFilter && !hasRealLocation
 
   useEffect(() => {
     loadVehicles()
@@ -168,6 +175,7 @@ const MapView: React.FC = () => {
           mapped.sort((a: VehicleLocation, b: VehicleLocation) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
         }
         setVehicles(mapped)
+        setIsDemoData(false)
       } else {
         throw new Error('No data')
       }
@@ -227,6 +235,7 @@ const MapView: React.FC = () => {
       }
 
       setVehicles(filtered)
+      setIsDemoData(true)
     } finally {
       setLoading(false)
     }
@@ -552,6 +561,11 @@ const MapView: React.FC = () => {
               <Popup>
                 <div style={{ minWidth: '200px' }}>
                   <h3 style={{ marginBottom: '8px' }}>{vehicle.name}</h3>
+                  {isDemoData && (
+                    <p style={{ marginBottom: '8px' }}>
+                      <Tag color="orange" icon={<InfoCircleOutlined />}>演示数据</Tag>
+                    </p>
+                  )}
                   <p style={{ marginBottom: '8px', color: '#666', fontSize: '0.875rem' }}>
                     {vehicle.description}
                   </p>
@@ -595,7 +609,7 @@ const MapView: React.FC = () => {
 
       <Card
         title={
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <TrophyOutlined style={{ color: '#faad14', fontSize: '1.2rem' }} />
             <span>附近车辆距离榜</span>
             <Tag color="blue" style={{ marginLeft: '4px' }}>{rankedVehicles.length}辆</Tag>
@@ -604,6 +618,9 @@ const MapView: React.FC = () => {
             )}
             {!hasRealLocation && sortBy === 'distance' && (
               <Tag color="orange" style={{ marginLeft: '4px' }}>按评分排序（未定位）</Tag>
+            )}
+            {isDemoData && (
+              <Tag color="warning" icon={<InfoCircleOutlined />} style={{ marginLeft: '4px' }}>演示数据</Tag>
             )}
             {selectedVehicleId && (
               <Tag color="purple" style={{ marginLeft: '4px' }}>
@@ -628,7 +645,7 @@ const MapView: React.FC = () => {
         {locationFailed && (
           <Alert
             message="无法获取您的位置"
-            description="定位失败，无法按距离排序附近车辆。请检查浏览器定位权限，或点击「定位」按钮重试。当前列表按评分排序展示。"
+            description="定位失败，无法按距离排序附近车辆。请检查浏览器定位权限，或点击「定位」按钮重试。"
             type="warning"
             showIcon
             icon={<ExclamationCircleOutlined />}
@@ -641,7 +658,7 @@ const MapView: React.FC = () => {
           />
         )}
 
-        {!locationFailed && !hasRealLocation && !locating && (
+        {!locationFailed && !hasRealLocation && !locating && !isDemoData && (
           <Alert
             message="尚未定位"
             description="开启定位后即可按距离查看附近车辆，快速找到离您最近的可租车辆。"
@@ -657,175 +674,235 @@ const MapView: React.FC = () => {
           />
         )}
 
-        <Row gutter={[16, 16]}>
-          {rankedVehicles.map((vehicle, index) => {
-            const rankBadge = getRankBadge(index)
-            const distKm = vehicle.distance ?? 0
-            const showDistance = hasRealLocation && vehicle.distance !== undefined
-            const showRank = hasRealLocation && sortBy === 'distance'
-            return (
-              <Col xs={24} sm={12} lg={8} key={vehicle.id}>
-                <div
-                  ref={(el) => setCardRef(vehicle.id, el)}
-                  onClick={() => handleCardClick(vehicle)}
-                  style={{
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    border: selectedVehicleId === vehicle.id ? '2px solid #667eea' : '1px solid #f0f0f0',
-                    borderRadius: '12px',
-                    background: selectedVehicleId === vehicle.id
-                      ? 'linear-gradient(135deg, #f0f5ff 0%, #e6f0ff 100%)'
-                      : index < 3 && showRank
-                        ? getDistanceBg(distKm)
-                        : 'white',
-                    boxShadow: selectedVehicleId === vehicle.id
-                      ? '0 4px 12px rgba(102, 126, 234, 0.3)'
-                      : index < 3 && showRank
-                        ? '0 2px 8px rgba(0,0,0,0.06)'
-                        : 'none',
-                    transform: selectedVehicleId === vehicle.id ? 'translateY(-2px)' : 'translateY(0)',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {rankBadge && showRank && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '28px',
-                      height: '28px',
-                      background: rankBadge.bg,
-                      color: rankBadge.color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 'bold',
-                      fontSize: '0.8rem',
-                      borderBottomRightRadius: '8px',
-                      zIndex: 1
-                    }}>
-                      {rankBadge.label}
-                    </div>
-                  )}
+        {isDemoData && !hasActiveFilter && (
+          <Alert
+            message="当前为演示数据"
+            description="服务器未连接或定位失败，以下车辆为演示示例，不可用于真实预订。请选择城市或开启定位以查看真实车辆。"
+            type="warning"
+            showIcon
+            icon={<InfoCircleOutlined />}
+            style={{ marginBottom: '16px', borderRadius: '8px' }}
+          />
+        )}
 
-                  {showRank && !rankBadge && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '28px',
-                      height: '28px',
-                      background: '#f0f0f0',
-                      color: '#999',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.75rem',
-                      borderBottomRightRadius: '8px',
-                      zIndex: 1
-                    }}>
-                      {index + 1}
-                    </div>
-                  )}
-
-                  <Card
-                    size="small"
-                    style={{
-                      borderRadius: '12px',
-                      background: 'transparent',
-                      border: 'none'
-                    }}
-                    bodyStyle={{ padding: '14px 12px' }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+        {shouldShowEmptyGuide ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', background: 'linear-gradient(135deg, #f9f9f9 0%, #f0f0f0 100%)', borderRadius: '12px' }}>
+            <div style={{ fontSize: '3.5rem', marginBottom: '16px' }}>🚗</div>
+            <h3 style={{ color: '#333', marginBottom: '8px' }}>尚未找到附近车辆</h3>
+            <p style={{ color: '#999', marginBottom: '20px', fontSize: '0.9rem' }}>
+              请开启定位，或选择一个城市来查看可用车辆
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button
+                type="primary"
+                icon={<AimOutlined />}
+                onClick={getUserLocation}
+                style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none'
+                }}
+              >
+                开启定位
+              </Button>
+              <Button
+                icon={<UnorderedListOutlined />}
+                onClick={() => document.querySelector<HTMLDivElement>('select')?.click()}
+              >
+                选择城市
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <Row gutter={[16, 16]}>
+              {rankedVehicles.map((vehicle, index) => {
+                const rankBadge = getRankBadge(index)
+                const distKm = vehicle.distance ?? 0
+                const showDistance = hasRealLocation && vehicle.distance !== undefined
+                const showRank = hasRealLocation && sortBy === 'distance'
+                return (
+                  <Col xs={24} sm={12} lg={8} key={vehicle.id}>
+                    <div
+                      ref={(el) => setCardRef(vehicle.id, el)}
+                      onClick={() => handleCardClick(vehicle)}
+                      style={{
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        border: selectedVehicleId === vehicle.id ? '2px solid #667eea' : '1px solid #f0f0f0',
+                        borderRadius: '12px',
+                        background: selectedVehicleId === vehicle.id
+                          ? 'linear-gradient(135deg, #f0f5ff 0%, #e6f0ff 100%)'
+                          : index < 3 && showRank
+                            ? getDistanceBg(distKm)
+                            : 'white',
+                        boxShadow: selectedVehicleId === vehicle.id
+                          ? '0 4px 12px rgba(102, 126, 234, 0.3)'
+                          : index < 3 && showRank
+                            ? '0 2px 8px rgba(0,0,0,0.06)'
+                            : 'none',
+                        transform: selectedVehicleId === vehicle.id ? 'translateY(-2px)' : 'translateY(0)',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {isDemoData && (
                         <div style={{
-                          fontWeight: 'bold',
-                          marginBottom: '6px',
-                          color: selectedVehicleId === vehicle.id ? '#667eea' : '#333',
+                          position: 'absolute',
+                          top: '8px',
+                          right: '8px',
+                          zIndex: 2,
+                          fontSize: '0.65rem',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          background: '#fff7e6',
+                          color: '#fa8c16',
+                          border: '1px solid #ffd591',
+                          fontWeight: 'bold'
+                        }}>
+                          演示
+                        </div>
+                      )}
+
+                      {rankBadge && showRank && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '28px',
+                          height: '28px',
+                          background: rankBadge.bg,
+                          color: rankBadge.color,
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '0.95rem'
+                          justifyContent: 'center',
+                          fontWeight: 'bold',
+                          fontSize: '0.8rem',
+                          borderBottomRightRadius: '8px',
+                          zIndex: 1
                         }}>
-                          <CarOutlined style={{ fontSize: '1rem', flexShrink: 0 }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vehicle.name}</span>
+                          {rankBadge.label}
                         </div>
-                        <div style={{ color: '#666', fontSize: '0.8rem', marginBottom: '6px' }}>
-                          <EnvironmentOutlined /> {vehicle.location}
+                      )}
+
+                      {showRank && !rankBadge && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '28px',
+                          height: '28px',
+                          background: '#f0f0f0',
+                          color: '#999',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.75rem',
+                          borderBottomRightRadius: '8px',
+                          zIndex: 1
+                        }}>
+                          {index + 1}
                         </div>
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                          <Tag color="blue" style={{ margin: 0, fontSize: '0.75rem' }}>{vehicle.type}</Tag>
-                          <Tag
-                            color={vehicle.available ? 'green' : 'red'}
-                            style={{ margin: 0, fontSize: '0.75rem' }}
-                          >
-                            {vehicle.available ? '可租' : '已租满'}
-                          </Tag>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        {showDistance && (
-                          <div style={{
-                            marginBottom: '8px',
-                            padding: '4px 10px',
-                            borderRadius: '8px',
-                            background: getDistanceBg(distKm),
-                            border: `1px solid ${getDistanceColor(distKm)}22`,
-                            textAlign: 'center'
-                          }}>
+                      )}
+
+                      <Card
+                        size="small"
+                        style={{
+                          borderRadius: '12px',
+                          background: 'transparent',
+                          border: 'none'
+                        }}
+                        bodyStyle={{ padding: '14px 12px' }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{
-                              color: getDistanceColor(distKm),
                               fontWeight: 'bold',
-                              fontSize: '1rem',
-                              lineHeight: 1.2
+                              marginBottom: '6px',
+                              color: selectedVehicleId === vehicle.id ? '#667eea' : '#333',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '0.95rem'
                             }}>
-                              {formatDistance(distKm)}
+                              <CarOutlined style={{ fontSize: '1rem', flexShrink: 0 }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vehicle.name}</span>
                             </div>
-                            <div style={{
-                              color: getDistanceColor(distKm),
-                              fontSize: '0.65rem',
-                              opacity: 0.7
-                            }}>
-                              距您
+                            <div style={{ color: '#666', fontSize: '0.8rem', marginBottom: '6px' }}>
+                              <EnvironmentOutlined /> {vehicle.location}
+                            </div>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              <Tag color="blue" style={{ margin: 0, fontSize: '0.75rem' }}>{vehicle.type}</Tag>
+                              <Tag
+                                color={vehicle.available ? 'green' : 'red'}
+                                style={{ margin: 0, fontSize: '0.75rem' }}
+                              >
+                                {vehicle.available ? '可租' : '已租满'}
+                              </Tag>
                             </div>
                           </div>
-                        )}
-                        <div style={{
-                          color: '#ff4d4f',
-                          fontWeight: 'bold',
-                          fontSize: '1.1rem'
-                        }}>
-                          ¥{vehicle.price}
-                          <span style={{ fontSize: '0.7rem', color: '#999', fontWeight: 'normal' }}>/天</span>
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            {showDistance && (
+                              <div style={{
+                                marginBottom: '8px',
+                                padding: '4px 10px',
+                                borderRadius: '8px',
+                                background: getDistanceBg(distKm),
+                                border: `1px solid ${getDistanceColor(distKm)}22`,
+                                textAlign: 'center'
+                              }}>
+                                <div style={{
+                                  color: getDistanceColor(distKm),
+                                  fontWeight: 'bold',
+                                  fontSize: '1rem',
+                                  lineHeight: 1.2
+                                }}>
+                                  {formatDistance(distKm)}
+                                </div>
+                                <div style={{
+                                  color: getDistanceColor(distKm),
+                                  fontSize: '0.65rem',
+                                  opacity: 0.7
+                                }}>
+                                  距您
+                                </div>
+                              </div>
+                            )}
+                            <div style={{
+                              color: '#ff4d4f',
+                              fontWeight: 'bold',
+                              fontSize: '1.1rem'
+                            }}>
+                              ¥{vehicle.price}
+                              <span style={{ fontSize: '0.7rem', color: '#999', fontWeight: 'normal' }}>/天</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                        {selectedVehicleId === vehicle.id && (
+                          <div style={{
+                            marginTop: '8px',
+                            paddingTop: '8px',
+                            borderTop: '1px dashed #d6e4ff',
+                            fontSize: '0.75rem',
+                            color: '#667eea',
+                            textAlign: 'center'
+                          }}>
+                            📍 地图上已定位
+                          </div>
+                        )}
+                      </Card>
                     </div>
-                    {selectedVehicleId === vehicle.id && (
-                      <div style={{
-                        marginTop: '8px',
-                        paddingTop: '8px',
-                        borderTop: '1px dashed #d6e4ff',
-                        fontSize: '0.75rem',
-                        color: '#667eea',
-                        textAlign: 'center'
-                      }}>
-                        📍 地图上已定位
-                      </div>
-                    )}
-                  </Card>
-                </div>
-              </Col>
-            )
-          })}
-        </Row>
+                  </Col>
+                )
+              })}
+            </Row>
 
-        {vehicles.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
-            <p>该区域暂无符合条件的车辆</p>
-          </div>
+            {vehicles.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
+                <p>该区域暂无符合条件的车辆</p>
+              </div>
+            )}
+          </>
         )}
       </Card>
     </div>
