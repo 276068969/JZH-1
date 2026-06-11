@@ -52,7 +52,9 @@ public class VehicleController {
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) Boolean available,
             @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false) String sortOrder) {
+            @RequestParam(required = false) String sortOrder,
+            @RequestParam(required = false) Double userLat,
+            @RequestParam(required = false) Double userLng) {
         VehicleSearchRequest request = new VehicleSearchRequest();
         request.setKeyword(keyword);
         request.setCity(city);
@@ -62,6 +64,8 @@ public class VehicleController {
         request.setAvailable(available != null ? available : true);
         request.setSortBy(sortBy);
         request.setSortOrder(sortOrder);
+        request.setUserLatitude(userLat);
+        request.setUserLongitude(userLng);
 
         List<Vehicle> vehicles = vehicleService.searchVehicles(request);
 
@@ -81,7 +85,9 @@ public class VehicleController {
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) Boolean available,
             @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false) String sortOrder) {
+            @RequestParam(required = false) String sortOrder,
+            @RequestParam(required = false) Double userLat,
+            @RequestParam(required = false) Double userLng) {
         VehicleSearchRequest request = new VehicleSearchRequest();
         request.setKeyword(keyword);
         request.setCity(city);
@@ -91,6 +97,8 @@ public class VehicleController {
         request.setAvailable(available);
         request.setSortBy(sortBy);
         request.setSortOrder(sortOrder);
+        request.setUserLatitude(userLat);
+        request.setUserLongitude(userLng);
 
         List<Vehicle> vehicles = vehicleService.searchVehicles(request);
 

@@ -91,7 +91,11 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
             wrapper.eq(Vehicle::getAvailable, request.getAvailable());
         }
 
-        if (request.getSortBy() != null && !request.getSortBy().isEmpty()) {
+        boolean isDistanceSort = "distance".equals(request.getSortBy())
+                && request.getUserLatitude() != null
+                && request.getUserLongitude() != null;
+
+        if (request.getSortBy() != null && !request.getSortBy().isEmpty() && !isDistanceSort) {
             boolean isAsc = "asc".equalsIgnoreCase(request.getSortOrder());
             switch (request.getSortBy()) {
                 case "price":
@@ -119,7 +123,7 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
                     wrapper.orderByDesc(Vehicle::getRating);
                     break;
             }
-        } else {
+        } else if (!isDistanceSort) {
             wrapper.orderByDesc(Vehicle::getRating);
         }
 
@@ -127,6 +131,18 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         if (vehicles.isEmpty()) {
             return filterMockVehicles(request);
         }
+
+        if (isDistanceSort) {
+            final double userLat = request.getUserLatitude();
+            final double userLng = request.getUserLongitude();
+            boolean isAsc = "asc".equalsIgnoreCase(request.getSortOrder()) || request.getSortOrder() == null || request.getSortOrder().isEmpty();
+            vehicles.sort((v1, v2) -> {
+                double d1 = calculateDistance(userLat, userLng, v1.getLatitude(), v1.getLongitude());
+                double d2 = calculateDistance(userLat, userLng, v2.getLatitude(), v2.getLongitude());
+                return isAsc ? Double.compare(d1, d2) : Double.compare(d2, d1);
+            });
+        }
+
         return vehicles;
     }
 
@@ -165,6 +181,11 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
                     if (sortBy == null || sortBy.isEmpty()) {
                         sortBy = "rating";
                         isAsc = false;
+                    }
+                    if ("distance".equals(sortBy) && request.getUserLatitude() != null && request.getUserLongitude() != null) {
+                        double d1 = calculateDistance(request.getUserLatitude(), request.getUserLongitude(), v1.getLatitude(), v1.getLongitude());
+                        double d2 = calculateDistance(request.getUserLatitude(), request.getUserLongitude(), v2.getLatitude(), v2.getLongitude());
+                        return isAsc ? Double.compare(d1, d2) : Double.compare(d2, d1);
                     }
                     int result = 0;
                     switch (sortBy) {
@@ -393,5 +414,17 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         vehicle.setAvailable(available);
         vehicle.setUpdateTime(LocalDateTime.now());
         return this.updateById(vehicle);
+    }
+
+    private double calculateDistance(double lat1, double lng1, Double lat2, Double lng2) {
+        if (lat2 == null || lng2 == null) return Double.MAX_VALUE;
+        final double EARTH_RADIUS = 6371.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return EARTH_RADIUS * c;
     }
 }

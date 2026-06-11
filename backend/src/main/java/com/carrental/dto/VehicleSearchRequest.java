@@ -13,4 +13,6 @@ public class VehicleSearchRequest {
     private Boolean available;
     private String sortBy;
     private String sortOrder;
+    private Double userLatitude;
+    private Double userLongitude;
 }
