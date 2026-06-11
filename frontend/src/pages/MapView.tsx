@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import { Card, Row, Col, Select, Input, Button, Tag, Slider } from 'antd'
-import { EnvironmentOutlined, SearchOutlined, FilterOutlined, CarOutlined, AimOutlined, SortAscendingOutlined, TrophyOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Select, Input, Button, Tag, Slider, Alert } from 'antd'
+import { EnvironmentOutlined, SearchOutlined, FilterOutlined, CarOutlined, AimOutlined, SortAscendingOutlined, TrophyOutlined, ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import L from 'leaflet'
 import axios from 'axios'
 
@@ -52,6 +52,8 @@ const getDistanceBg = (km: number): string => {
   return 'linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%)'
 }
 
+const DEFAULT_CENTER: [number, number] = [39.9042, 116.4074]
+
 const defaultIcon = new L.Icon({
   iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTQiIGZpbGw9IiM2NjdlZWEiLz4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxMiIgcj0iNCIgZmlsbD0id2hpdGUiLz4KPC9zdmc+',
   iconSize: [32, 32],
@@ -94,15 +96,28 @@ const MapView: React.FC = () => {
   const [availableFilter, setAvailableFilter] = useState<string>('true')
   const [sortBy, setSortBy] = useState<string>('distance')
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
+  const [locationFailed, setLocationFailed] = useState(false)
+  const [locating, setLocating] = useState(false)
   const [, setLoading] = useState(false)
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null)
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null)
   const cardRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
 
+  const hasRealLocation = userLocation !== null && !locationFailed
+
   useEffect(() => {
     loadVehicles()
-    getUserLocation()
   }, [selectedCity, typeFilter, minPrice, maxPrice, availableFilter, sortBy])
+
+  useEffect(() => {
+    getUserLocation()
+  }, [])
+
+  useEffect(() => {
+    if (hasRealLocation) {
+      loadVehicles()
+    }
+  }, [userLocation, locationFailed])
 
   const loadVehicles = async () => {
     setLoading(true)
@@ -114,23 +129,26 @@ const MapView: React.FC = () => {
       if (minPrice > 0) params.minPrice = minPrice
       if (maxPrice < 2000) params.maxPrice = maxPrice
       if (availableFilter !== 'all') params.available = availableFilter === 'true'
-      params.sortBy = sortBy
-      params.sortOrder = 'asc'
 
-      if (userLocation) {
-        params.userLat = userLocation[0]
-        params.userLng = userLocation[1]
+      if (hasRealLocation) {
+        params.sortBy = sortBy
+        params.sortOrder = 'asc'
+        params.userLat = userLocation![0]
+        params.userLng = userLocation![1]
+      } else {
+        params.sortBy = sortBy === 'distance' ? 'rating' : sortBy
+        params.sortOrder = sortBy === 'distance' ? 'desc' : 'asc'
       }
 
       const response = await axios.get('/api/vehicles/search', { params })
       const data = response.data?.data || response.data
       if (Array.isArray(data) && data.length > 0) {
-        const vehicles = data.map((v: any) => {
+        const mapped = data.map((v: any) => {
           const lat = v.latitude || v.lat
           const lng = v.longitude || v.lng
           let distance: number | undefined
-          if (userLocation && lat && lng) {
-            distance = haversineDistance(userLocation[0], userLocation[1], lat, lng)
+          if (hasRealLocation && lat && lng) {
+            distance = haversineDistance(userLocation![0], userLocation![1], lat, lng)
           }
           return {
             id: v.id,
@@ -146,10 +164,10 @@ const MapView: React.FC = () => {
             distance
           }
         })
-        if (sortBy === 'distance' && userLocation) {
-          vehicles.sort((a: VehicleLocation, b: VehicleLocation) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
+        if (sortBy === 'distance' && hasRealLocation) {
+          mapped.sort((a: VehicleLocation, b: VehicleLocation) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
         }
-        setVehicles(vehicles)
+        setVehicles(mapped)
       } else {
         throw new Error('No data')
       }
@@ -169,10 +187,11 @@ const MapView: React.FC = () => {
         { id: 12, name: '法拉利 488', lat: 39.9219, lng: 116.4435, type: '跑车', available: false, price: 1999, location: '北京市朝阳区', rating: 4.9, description: '意大利超跑，激情澎湃' },
       ]
 
-      const userLoc = userLocation || [39.9042, 116.4074]
-      mockVehicles.forEach(v => {
-        v.distance = haversineDistance(userLoc[0], userLoc[1], v.lat, v.lng)
-      })
+      if (hasRealLocation) {
+        mockVehicles.forEach(v => {
+          v.distance = haversineDistance(userLocation![0], userLocation![1], v.lat, v.lng)
+        })
+      }
 
       let filtered = mockVehicles
 
@@ -199,11 +218,11 @@ const MapView: React.FC = () => {
         filtered = filtered.filter(v => v.available === (availableFilter === 'true'))
       }
 
-      if (sortBy === 'distance') {
+      if (sortBy === 'distance' && hasRealLocation) {
         filtered.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
       } else if (sortBy === 'price') {
         filtered.sort((a, b) => a.price - b.price)
-      } else if (sortBy === 'rating') {
+      } else {
         filtered.sort((a, b) => b.rating - a.rating)
       }
 
@@ -214,34 +233,27 @@ const MapView: React.FC = () => {
   }
 
   const getUserLocation = () => {
+    setLocating(true)
+    setLocationFailed(false)
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation([position.coords.latitude, position.coords.longitude])
+          setLocationFailed(false)
+          setLocating(false)
         },
         () => {
-          setUserLocation([39.9042, 116.4074])
+          setUserLocation(null)
+          setLocationFailed(true)
+          setLocating(false)
         }
       )
     } else {
-      setUserLocation([39.9042, 116.4074])
+      setUserLocation(null)
+      setLocationFailed(true)
+      setLocating(false)
     }
   }
-
-  useEffect(() => {
-    if (userLocation && vehicles.length > 0) {
-      setVehicles(prev => {
-        const updated = prev.map(v => ({
-          ...v,
-          distance: haversineDistance(userLocation[0], userLocation[1], v.lat, v.lng)
-        }))
-        if (sortBy === 'distance') {
-          return [...updated].sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
-        }
-        return updated
-      })
-    }
-  }, [userLocation])
 
   const vehicleTypes = useMemo(() => {
     const allVehicles = vehicles.length > 0 ? vehicles : [
@@ -261,13 +273,13 @@ const MapView: React.FC = () => {
   }, [vehicles])
 
   const rankedVehicles = useMemo(() => {
-    if (sortBy === 'distance' && userLocation) {
+    if (sortBy === 'distance' && hasRealLocation) {
       return [...vehicles].sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
     }
     return vehicles
-  }, [vehicles, sortBy, userLocation])
+  }, [vehicles, sortBy, hasRealLocation])
 
-  const center = userLocation || [39.9042, 116.4074]
+  const mapDisplayCenter: [number, number] = userLocation || DEFAULT_CENTER
 
   const handleSearch = () => {
     loadVehicles()
@@ -326,6 +338,35 @@ const MapView: React.FC = () => {
     return null
   }
 
+  const renderLocationTag = () => {
+    if (locating) {
+      return (
+        <Tag icon={<AimOutlined />} color="processing" style={{ margin: 0, fontSize: '0.8rem', padding: '4px 10px' }}>
+          定位中...
+        </Tag>
+      )
+    }
+    if (hasRealLocation) {
+      return (
+        <Tag icon={<AimOutlined />} color="green" style={{ margin: 0, fontSize: '0.8rem', padding: '4px 10px' }}>
+          已定位 ({userLocation![0].toFixed(2)}, {userLocation![1].toFixed(2)})
+        </Tag>
+      )
+    }
+    if (locationFailed) {
+      return (
+        <Tag icon={<ExclamationCircleOutlined />} color="error" style={{ margin: 0, fontSize: '0.8rem', padding: '4px 10px', cursor: 'pointer' }} onClick={getUserLocation}>
+          定位失败，点击重试
+        </Tag>
+      )
+    }
+    return (
+      <Tag icon={<AimOutlined />} color="default" style={{ margin: 0, fontSize: '0.8rem', padding: '4px 10px' }}>
+        未定位
+      </Tag>
+    )
+  }
+
   return (
     <div>
       <Card
@@ -377,11 +418,12 @@ const MapView: React.FC = () => {
           <Col xs={24} md={4}>
             <Button
               size="large"
-              icon={<AimOutlined />}
+              icon={locating ? <ReloadOutlined spin /> : <AimOutlined />}
               onClick={getUserLocation}
               block
+              disabled={locating}
             >
-              定位
+              {locating ? '定位中' : '定位'}
             </Button>
           </Col>
           <Col xs={24} md={4}>
@@ -441,15 +483,17 @@ const MapView: React.FC = () => {
           </Col>
           <Col xs={24} md={5}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%' }}>
-              <SortAscendingOutlined style={{ color: '#667eea' }} />
+              <SortAscendingOutlined style={{ color: hasRealLocation || sortBy !== 'distance' ? '#667eea' : '#d9d9d9' }} />
               <span style={{ color: '#666', fontSize: '0.875rem' }}>排序：</span>
               <Select
-                value={sortBy}
+                value={hasRealLocation ? sortBy : (sortBy === 'distance' ? 'rating' : sortBy)}
                 onChange={setSortBy}
                 style={{ flex: 1 }}
                 size="large"
               >
-                <Option value="distance">距离最近</Option>
+                <Option value="distance" disabled={!hasRealLocation}>
+                  距离最近{!hasRealLocation ? '（需定位）' : ''}
+                </Option>
                 <Option value="price">价格最低</Option>
                 <Option value="rating">评分最高</Option>
               </Select>
@@ -457,15 +501,7 @@ const MapView: React.FC = () => {
           </Col>
           <Col xs={24} md={6}>
             <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: '8px' }}>
-              {userLocation ? (
-                <Tag icon={<AimOutlined />} color="green" style={{ margin: 0, fontSize: '0.8rem', padding: '4px 10px' }}>
-                  已定位 ({userLocation[0].toFixed(2)}, {userLocation[1].toFixed(2)})
-                </Tag>
-              ) : (
-                <Tag icon={<AimOutlined />} color="default" style={{ margin: 0, fontSize: '0.8rem', padding: '4px 10px' }}>
-                  未定位
-                </Tag>
-              )}
+              {renderLocationTag()}
             </div>
           </Col>
         </Row>
@@ -494,7 +530,7 @@ const MapView: React.FC = () => {
 
       <Card style={{ borderRadius: '12px', padding: '0', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <MapContainer
-          center={center}
+          center={mapDisplayCenter}
           zoom={12}
           style={{ height: '600px', width: '100%' }}
         >
@@ -519,7 +555,7 @@ const MapView: React.FC = () => {
                   <p style={{ marginBottom: '8px', color: '#666', fontSize: '0.875rem' }}>
                     {vehicle.description}
                   </p>
-                  {vehicle.distance !== undefined && (
+                  {hasRealLocation && vehicle.distance !== undefined && (
                     <p style={{ marginBottom: '8px' }}>
                       <span style={{
                         background: getDistanceBg(vehicle.distance),
@@ -563,8 +599,11 @@ const MapView: React.FC = () => {
             <TrophyOutlined style={{ color: '#faad14', fontSize: '1.2rem' }} />
             <span>附近车辆距离榜</span>
             <Tag color="blue" style={{ marginLeft: '4px' }}>{rankedVehicles.length}辆</Tag>
-            {sortBy === 'distance' && userLocation && (
+            {hasRealLocation && sortBy === 'distance' && (
               <Tag color="green" style={{ marginLeft: '4px' }}>按距离排序</Tag>
+            )}
+            {!hasRealLocation && sortBy === 'distance' && (
+              <Tag color="orange" style={{ marginLeft: '4px' }}>按评分排序（未定位）</Tag>
             )}
             {selectedVehicleId && (
               <Tag color="purple" style={{ marginLeft: '4px' }}>
@@ -586,10 +625,44 @@ const MapView: React.FC = () => {
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
         }}
       >
+        {locationFailed && (
+          <Alert
+            message="无法获取您的位置"
+            description="定位失败，无法按距离排序附近车辆。请检查浏览器定位权限，或点击「定位」按钮重试。当前列表按评分排序展示。"
+            type="warning"
+            showIcon
+            icon={<ExclamationCircleOutlined />}
+            action={
+              <Button size="small" type="primary" onClick={getUserLocation} icon={<ReloadOutlined />}>
+                重新定位
+              </Button>
+            }
+            style={{ marginBottom: '16px', borderRadius: '8px' }}
+          />
+        )}
+
+        {!locationFailed && !hasRealLocation && !locating && (
+          <Alert
+            message="尚未定位"
+            description="开启定位后即可按距离查看附近车辆，快速找到离您最近的可租车辆。"
+            type="info"
+            showIcon
+            icon={<AimOutlined />}
+            action={
+              <Button size="small" type="primary" onClick={getUserLocation} icon={<AimOutlined />}>
+                开始定位
+              </Button>
+            }
+            style={{ marginBottom: '16px', borderRadius: '8px' }}
+          />
+        )}
+
         <Row gutter={[16, 16]}>
           {rankedVehicles.map((vehicle, index) => {
             const rankBadge = getRankBadge(index)
             const distKm = vehicle.distance ?? 0
+            const showDistance = hasRealLocation && vehicle.distance !== undefined
+            const showRank = hasRealLocation && sortBy === 'distance'
             return (
               <Col xs={24} sm={12} lg={8} key={vehicle.id}>
                 <div
@@ -602,12 +675,12 @@ const MapView: React.FC = () => {
                     borderRadius: '12px',
                     background: selectedVehicleId === vehicle.id
                       ? 'linear-gradient(135deg, #f0f5ff 0%, #e6f0ff 100%)'
-                      : index < 3 && sortBy === 'distance'
+                      : index < 3 && showRank
                         ? getDistanceBg(distKm)
                         : 'white',
                     boxShadow: selectedVehicleId === vehicle.id
                       ? '0 4px 12px rgba(102, 126, 234, 0.3)'
-                      : index < 3 && sortBy === 'distance'
+                      : index < 3 && showRank
                         ? '0 2px 8px rgba(0,0,0,0.06)'
                         : 'none',
                     transform: selectedVehicleId === vehicle.id ? 'translateY(-2px)' : 'translateY(0)',
@@ -615,7 +688,7 @@ const MapView: React.FC = () => {
                     overflow: 'hidden'
                   }}
                 >
-                  {rankBadge && sortBy === 'distance' && (
+                  {rankBadge && showRank && (
                     <div style={{
                       position: 'absolute',
                       top: 0,
@@ -636,7 +709,7 @@ const MapView: React.FC = () => {
                     </div>
                   )}
 
-                  {sortBy === 'distance' && !rankBadge && (
+                  {showRank && !rankBadge && (
                     <div style={{
                       position: 'absolute',
                       top: 0,
@@ -693,7 +766,7 @@ const MapView: React.FC = () => {
                         </div>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        {vehicle.distance !== undefined && (
+                        {showDistance && (
                           <div style={{
                             marginBottom: '8px',
                             padding: '4px 10px',
