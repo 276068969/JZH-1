@@ -102,13 +102,56 @@ const MapView: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null)
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null)
   const [isDemoData, setIsDemoData] = useState(false)
+  const [availableOnly, setAvailableOnly] = useState(false)
+  const [highRatingOnly, setHighRatingOnly] = useState(false)
+  const [businessOnly, setBusinessOnly] = useState(false)
+  const [familyOnly, setFamilyOnly] = useState(false)
   const cardRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
 
   const hasRealLocation = userLocation !== null && !locationFailed
 
+  const BUSINESS_TYPES = ['MPV', '轿车']
+  const FAMILY_TYPES = ['SUV', 'MPV']
+  const HIGH_RATING_THRESHOLD = 4.7
+  const BUSINESS_MIN_PRICE = 350
+
+  const displayedVehicles = useMemo(() => {
+    return vehicles.filter(v => {
+      if (availableOnly && !v.available) return false
+      if (highRatingOnly && v.rating < HIGH_RATING_THRESHOLD) return false
+      if (businessOnly) {
+        if (!BUSINESS_TYPES.includes(v.type)) return false
+        if (v.price < BUSINESS_MIN_PRICE) return false
+      }
+      if (familyOnly && !FAMILY_TYPES.includes(v.type)) return false
+      return true
+    })
+  }, [vehicles, availableOnly, highRatingOnly, businessOnly, familyOnly])
+
+  const countAvailable = useMemo(() => vehicles.filter(v => v.available).length, [vehicles])
+  const countHighRating = useMemo(() => vehicles.filter(v => v.rating >= HIGH_RATING_THRESHOLD).length, [vehicles])
+  const countBusiness = useMemo(() =>
+    vehicles.filter(v => BUSINESS_TYPES.includes(v.type) && v.price >= BUSINESS_MIN_PRICE).length
+  , [vehicles])
+  const countFamily = useMemo(() =>
+    vehicles.filter(v => FAMILY_TYPES.includes(v.type)).length
+  , [vehicles])
+
   const hasActiveFilter = useMemo(() => {
-    return !!(selectedCity || searchText || typeFilter || minPrice > 0 || maxPrice < 2000 || availableFilter !== 'true')
-  }, [selectedCity, searchText, typeFilter, minPrice, maxPrice, availableFilter])
+    return !!(
+      selectedCity || searchText || typeFilter || minPrice > 0 || maxPrice < 2000 ||
+      availableFilter !== 'true' || availableOnly || highRatingOnly || businessOnly || familyOnly
+    )
+  }, [selectedCity, searchText, typeFilter, minPrice, maxPrice, availableFilter,
+      availableOnly, highRatingOnly, businessOnly, familyOnly])
+
+  const clearQuickFilters = () => {
+    setAvailableOnly(false)
+    setHighRatingOnly(false)
+    setBusinessOnly(false)
+    setFamilyOnly(false)
+    setTypeFilter('')
+  }
 
   const shouldShowEmptyGuide = isDemoData && !hasActiveFilter && !hasRealLocation
 
@@ -283,10 +326,10 @@ const MapView: React.FC = () => {
 
   const rankedVehicles = useMemo(() => {
     if (sortBy === 'distance' && hasRealLocation) {
-      return [...vehicles].sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
+      return [...displayedVehicles].sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
     }
-    return vehicles
-  }, [vehicles, sortBy, hasRealLocation])
+    return displayedVehicles
+  }, [displayedVehicles, sortBy, hasRealLocation])
 
   const mapDisplayCenter: [number, number] = userLocation || DEFAULT_CENTER
 
@@ -333,12 +376,12 @@ const MapView: React.FC = () => {
 
   useEffect(() => {
     if (selectedVehicleId) {
-      const exists = vehicles.some(v => v.id === selectedVehicleId)
+      const exists = displayedVehicles.some(v => v.id === selectedVehicleId)
       if (!exists) {
         setSelectedVehicleId(null)
       }
     }
-  }, [vehicles, selectedVehicleId])
+  }, [displayedVehicles, selectedVehicleId])
 
   const getRankBadge = (index: number) => {
     if (index === 0) return { bg: 'linear-gradient(135deg, #ffd700 0%, #ffb800 100%)', color: '#8B6914', label: '1' }
@@ -515,23 +558,54 @@ const MapView: React.FC = () => {
           </Col>
         </Row>
 
-        <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <span style={{ color: '#666' }}>快速筛选：</span>
+        <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ color: '#666', marginRight: '4px' }}>
+            <FilterOutlined style={{ marginRight: '4px' }} />快捷筛选：
+          </span>
           <Tag
-            color="blue"
-            style={{ cursor: 'pointer' }}
-            onClick={() => { setSelectedCity(''); setTypeFilter(''); setSearchText(''); setSelectedVehicleId(null) }}
+            color={(availableOnly || highRatingOnly || businessOnly || familyOnly || typeFilter) ? 'default' : 'blue'}
+            style={{ cursor: 'pointer', padding: '4px 12px', fontSize: '0.85rem', fontWeight: 500 }}
+            onClick={() => { clearQuickFilters(); setSelectedVehicleId(null) }}
           >
-            全部
+            ✕ 清除筛选
           </Tag>
+          <Tag
+            color={availableOnly ? 'green' : 'default'}
+            style={{ cursor: 'pointer', padding: '4px 12px', fontSize: '0.85rem', fontWeight: availableOnly ? 600 : 400 }}
+            onClick={() => { setAvailableOnly(!availableOnly); setSelectedVehicleId(null) }}
+          >
+            ✅ 可租车辆 <Tag color={availableOnly ? 'green' : 'gray'} style={{ margin: 0, padding: '0 6px', marginLeft: '4px' }}>{countAvailable}</Tag>
+          </Tag>
+          <Tag
+            color={highRatingOnly ? 'gold' : 'default'}
+            style={{ cursor: 'pointer', padding: '4px 12px', fontSize: '0.85rem', fontWeight: highRatingOnly ? 600 : 400 }}
+            onClick={() => { setHighRatingOnly(!highRatingOnly); setSelectedVehicleId(null) }}
+          >
+            ⭐ 高评分 ≥{HIGH_RATING_THRESHOLD} <Tag color={highRatingOnly ? 'gold' : 'gray'} style={{ margin: 0, padding: '0 6px', marginLeft: '4px' }}>{countHighRating}</Tag>
+          </Tag>
+          <Tag
+            color={businessOnly ? 'purple' : 'default'}
+            style={{ cursor: 'pointer', padding: '4px 12px', fontSize: '0.85rem', fontWeight: businessOnly ? 600 : 400 }}
+            onClick={() => { setBusinessOnly(!businessOnly); setSelectedVehicleId(null) }}
+          >
+            💼 商务车 ≥¥{BUSINESS_MIN_PRICE} <Tag color={businessOnly ? 'purple' : 'gray'} style={{ margin: 0, padding: '0 6px', marginLeft: '4px' }}>{countBusiness}</Tag>
+          </Tag>
+          <Tag
+            color={familyOnly ? 'cyan' : 'default'}
+            style={{ cursor: 'pointer', padding: '4px 12px', fontSize: '0.85rem', fontWeight: familyOnly ? 600 : 400 }}
+            onClick={() => { setFamilyOnly(!familyOnly); setSelectedVehicleId(null) }}
+          >
+            👨‍👩‍👧 家庭车型 <Tag color={familyOnly ? 'cyan' : 'gray'} style={{ margin: 0, padding: '0 6px', marginLeft: '4px' }}>{countFamily}</Tag>
+          </Tag>
+          <span style={{ width: '1px', height: '20px', background: '#e8e8e8', margin: '0 4px' }} />
           {vehicleTypes.map(type => (
             <Tag
               key={type}
-              color={typeFilter === type ? 'purple' : 'default'}
-              style={{ cursor: 'pointer' }}
+              color={typeFilter === type ? 'geekblue' : 'default'}
+              style={{ cursor: 'pointer', padding: '4px 12px', fontSize: '0.85rem', fontWeight: typeFilter === type ? 600 : 400 }}
               onClick={() => { setTypeFilter(typeFilter === type ? '' : type); setSelectedVehicleId(null) }}
             >
-              {type}
+              {typeFilter === type ? '● ' : ''}{type}
             </Tag>
           ))}
         </div>
@@ -549,7 +623,7 @@ const MapView: React.FC = () => {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {vehicles.map(vehicle => (
+          {displayedVehicles.map(vehicle => (
             <Marker
               key={vehicle.id}
               position={[vehicle.lat, vehicle.lng]}
@@ -612,7 +686,27 @@ const MapView: React.FC = () => {
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <TrophyOutlined style={{ color: '#faad14', fontSize: '1.2rem' }} />
             <span>附近车辆距离榜</span>
-            <Tag color="blue" style={{ marginLeft: '4px' }}>{rankedVehicles.length}辆</Tag>
+            <Tag color="blue" style={{ marginLeft: '4px' }}>{displayedVehicles.length}辆</Tag>
+            {vehicles.length !== displayedVehicles.length && (
+              <Tag color="magenta" style={{ marginLeft: '4px' }}>
+                筛选中（共{vehicles.length}辆）
+              </Tag>
+            )}
+            {availableOnly && (
+              <Tag color="green" style={{ marginLeft: '4px' }}>仅可租</Tag>
+            )}
+            {highRatingOnly && (
+              <Tag color="gold" style={{ marginLeft: '4px' }}>高评分</Tag>
+            )}
+            {businessOnly && (
+              <Tag color="purple" style={{ marginLeft: '4px' }}>商务车</Tag>
+            )}
+            {familyOnly && (
+              <Tag color="cyan" style={{ marginLeft: '4px' }}>家庭车型</Tag>
+            )}
+            {typeFilter && (
+              <Tag color="geekblue" style={{ marginLeft: '4px' }}>{typeFilter}</Tag>
+            )}
             {hasRealLocation && sortBy === 'distance' && (
               <Tag color="green" style={{ marginLeft: '4px' }}>按距离排序</Tag>
             )}
@@ -896,10 +990,34 @@ const MapView: React.FC = () => {
               })}
             </Row>
 
-            {vehicles.length === 0 && (
+            {displayedVehicles.length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
-                <p>该区域暂无符合条件的车辆</p>
+                <h3 style={{ color: '#666', marginBottom: '8px' }}>暂无符合条件的车辆</h3>
+                <p style={{ fontSize: '0.9rem', marginBottom: '16px' }}>
+                  当前筛选条件下没有找到匹配的车辆
+                  {hasActiveFilter && '，试试调整或清除部分筛选条件'}
+                </p>
+                {hasActiveFilter && (
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={() => {
+                      clearQuickFilters()
+                      setSelectedCity('')
+                      setSearchText('')
+                      setMinPrice(0)
+                      setMaxPrice(2000)
+                      setAvailableFilter('true')
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      border: 'none'
+                    }}
+                  >
+                    清除所有筛选
+                  </Button>
+                )}
               </div>
             )}
           </>
