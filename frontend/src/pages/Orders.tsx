@@ -186,14 +186,20 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
   const handleCancel = async (orderId: number) => {
     Modal.confirm({
       title: '确认取消订单',
-      content: '确定要取消这个订单吗？',
+      content: '确定要取消这个订单吗？取消后车辆将恢复可租状态。',
       onOk: async () => {
         try {
-          await axios.delete(`/api/orders/${orderId}`)
-          message.success('订单已取消')
-          loadOrders()
+          const response = await axios.delete(`/api/orders/${orderId}`)
+          if (response.data?.code === 200) {
+            message.success('订单已取消，车辆已恢复可租')
+            loadOrders()
+          } else if (response.data?.code === 401) {
+            message.error('登录已过期，请重新登录')
+          } else {
+            message.error(response.data?.message || '取消订单失败')
+          }
         } catch (error: any) {
-          message.error(error.response?.data?.message || '取消订单失败')
+          message.error(error.response?.data?.message || '取消订单失败，请稍后重试')
         }
       }
     })

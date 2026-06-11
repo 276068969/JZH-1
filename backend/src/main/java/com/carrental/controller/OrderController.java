@@ -90,11 +90,33 @@ public class OrderController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("code", 200);
-        response.put("message", "订单已取消");
+        try {
+            Long userId = jwtAuthHelper.getCurrentUserIdRequired();
 
-        return ResponseEntity.ok(response);
+            Order order = orderService.cancelOrder(id, userId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "订单已取消");
+            response.put("data", order);
+
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> response = new HashMap<>();
+            if (e.getMessage().contains("未登录")) {
+                response.put("code", 401);
+                response.put("message", e.getMessage());
+                return ResponseEntity.status(401).body(response);
+            }
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        }
     }
 
     @PostMapping("/{id}/renew/check")

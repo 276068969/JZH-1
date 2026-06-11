@@ -13,4 +13,6 @@ public interface OrderService extends IService<Order> {
     List<OrderDTO> getUserOrderDTOs(Long userId);
     Map<String, Object> checkRenewAvailability(Long orderId, String newEndDate);
     Order renewOrder(Long orderId, String newEndDate);
+    Order cancelOrder(Long orderId, Long userId);
+    void refreshOrderStatus(Order order);
 }

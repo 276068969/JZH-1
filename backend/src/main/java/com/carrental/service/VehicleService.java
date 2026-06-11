@@ -12,4 +12,5 @@ public interface VehicleService extends IService<Vehicle> {
     List<Vehicle> searchVehicles(String keyword);
     List<Vehicle> searchVehicles(VehicleSearchRequest request);
     List<Vehicle> getVehiclesByIds(List<Long> ids);
+    boolean updateAvailable(Long vehicleId, Boolean available);
 }

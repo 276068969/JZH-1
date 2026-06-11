@@ -9,6 +9,7 @@ import com.carrental.service.VehicleService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -366,5 +367,16 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         return allMock.stream()
                 .filter(v -> ids.contains(v.getId()))
                 .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public boolean updateAvailable(Long vehicleId, Boolean available) {
+        Vehicle vehicle = this.getById(vehicleId);
+        if (vehicle == null) {
+            return false;
+        }
+        vehicle.setAvailable(available);
+        vehicle.setUpdateTime(LocalDateTime.now());
+        return this.updateById(vehicle);
     }
 }

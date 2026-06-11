@@ -49,6 +49,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setUpdateTime(LocalDateTime.now());
 
         this.save(order);
+
+        vehicleService.updateAvailable(vehicleId, false);
+
+        refreshOrderStatus(order);
         return order;
     }
 
@@ -61,6 +65,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         List<Order> orders = this.list(wrapper);
         if (orders.isEmpty()) {
             return getMockOrders(userId);
+        }
+
+        for (Order order : orders) {
+            refreshOrderStatus(order);
         }
         return orders;
     }
@@ -178,6 +186,84 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         this.updateById(order);
         return order;
+    }
+
+    @Override
+    @Transactional
+    public Order cancelOrder(Long orderId, Long userId) {
+        Order order = this.getById(orderId);
+        if (order == null) {
+            throw new RuntimeException("订单不存在");
+        }
+
+        if (!order.getUserId().equals(userId)) {
+            throw new RuntimeException("无权操作此订单");
+        }
+
+        if ("cancelled".equals(order.getStatus())) {
+            throw new RuntimeException("订单已取消，请勿重复操作");
+        }
+
+        if ("completed".equals(order.getStatus())) {
+            throw new RuntimeException("已完成的订单无法取消");
+        }
+
+        String oldStatus = order.getStatus();
+        order.setStatus("cancelled");
+        order.setUpdateTime(LocalDateTime.now());
+        this.updateById(order);
+
+        if ("pending".equals(oldStatus) || "active".equals(oldStatus)) {
+            releaseVehicleIfNoActiveOrders(order.getVehicleId());
+        }
+
+        return order;
+    }
+
+    @Override
+    @Transactional
+    public void refreshOrderStatus(Order order) {
+        if (order == null) return;
+        String currentStatus = order.getStatus();
+
+        if ("cancelled".equals(currentStatus) || "completed".equals(currentStatus)) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime start = order.getStartDate();
+        LocalDateTime end = order.getEndDate();
+
+        String newStatus = currentStatus;
+
+        if (now.isBefore(start)) {
+            newStatus = "pending";
+        } else if (!now.isBefore(start) && !now.isAfter(end)) {
+            newStatus = "active";
+        } else {
+            newStatus = "completed";
+        }
+
+        if (!currentStatus.equals(newStatus)) {
+            order.setStatus(newStatus);
+            order.setUpdateTime(now);
+            this.updateById(order);
+
+            if ("completed".equals(newStatus)) {
+                releaseVehicleIfNoActiveOrders(order.getVehicleId());
+            }
+        }
+    }
+
+    private void releaseVehicleIfNoActiveOrders(Long vehicleId) {
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Order::getVehicleId, vehicleId)
+               .in(Order::getStatus, Arrays.asList("pending", "active"));
+        List<Order> activeOrders = this.list(wrapper);
+
+        if (activeOrders.isEmpty()) {
+            vehicleService.updateAvailable(vehicleId, true);
+        }
     }
 
     private boolean isVehicleAvailableForRenew(Long vehicleId, Long currentOrderId,
