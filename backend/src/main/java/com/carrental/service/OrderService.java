@@ -2,6 +2,7 @@ package com.carrental.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.carrental.dto.OrderDTO;
+import com.carrental.dto.UserRentalOverviewDTO;
 import com.carrental.entity.Order;
 
 import java.util.List;
@@ -16,4 +17,5 @@ public interface OrderService extends IService<Order> {
     Order cancelOrder(Long orderId, Long userId);
     void refreshOrderStatus(Order order);
     void refreshAllPendingOrders();
+    UserRentalOverviewDTO getUserRentalOverview(Long userId);
 }

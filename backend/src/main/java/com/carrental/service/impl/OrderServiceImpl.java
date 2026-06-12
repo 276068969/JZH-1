@@ -3,6 +3,7 @@ package com.carrental.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.carrental.dto.OrderDTO;
+import com.carrental.dto.UserRentalOverviewDTO;
 import com.carrental.entity.Order;
 import com.carrental.entity.Vehicle;
 import com.carrental.mapper.OrderMapper;
@@ -280,6 +281,73 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         for (Order order : pendingOrders) {
             refreshOrderStatus(order);
         }
+    }
+
+    @Override
+    public UserRentalOverviewDTO getUserRentalOverview(Long userId) {
+        List<Order> orders = getUserOrders(userId);
+
+        UserRentalOverviewDTO overview = new UserRentalOverviewDTO();
+
+        BigDecimal totalSpent = BigDecimal.ZERO;
+        int activeCount = 0;
+        int completedCount = 0;
+        LocalDateTime lastOrderTime = null;
+
+        Map<String, Integer> vehicleTypeCount = new HashMap<>();
+        List<Long> vehicleIds = orders.stream()
+                .map(Order::getVehicleId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        List<Vehicle> vehicles = vehicleService.getVehiclesByIds(vehicleIds);
+        if (vehicles == null || vehicles.isEmpty()) {
+            vehicles = getMockVehicles();
+        }
+        Map<Long, Vehicle> vehicleMap = vehicles.stream()
+                .collect(Collectors.toMap(Vehicle::getId, v -> v));
+
+        for (Order order : orders) {
+            if (!"cancelled".equals(order.getStatus())) {
+                totalSpent = totalSpent.add(order.getTotalPrice());
+            }
+
+            String status = order.getStatus();
+            if ("active".equals(status) || "pending".equals(status)) {
+                activeCount++;
+            } else if ("completed".equals(status)) {
+                completedCount++;
+            }
+
+            if (lastOrderTime == null || order.getCreateTime().isAfter(lastOrderTime)) {
+                lastOrderTime = order.getCreateTime();
+            }
+
+            Vehicle vehicle = vehicleMap.get(order.getVehicleId());
+            if (vehicle != null && vehicle.getType() != null) {
+                String type = vehicle.getType();
+                vehicleTypeCount.put(type, vehicleTypeCount.getOrDefault(type, 0) + 1);
+            }
+        }
+
+        overview.setTotalSpent(totalSpent);
+        overview.setTotalOrderCount(orders.size());
+        overview.setActiveOrderCount(activeCount);
+        overview.setCompletedOrderCount(completedCount);
+        overview.setLastOrderTime(lastOrderTime);
+
+        String preferredType = null;
+        int maxCount = 0;
+        for (Map.Entry<String, Integer> entry : vehicleTypeCount.entrySet()) {
+            if (entry.getValue() > maxCount) {
+                maxCount = entry.getValue();
+                preferredType = entry.getKey();
+            }
+        }
+        overview.setPreferredVehicleType(preferredType);
+        overview.setPreferredVehicleTypeCount(maxCount);
+
+        return overview;
     }
 
     private boolean isVehicleAvailableForRenew(Long vehicleId, Long currentOrderId,

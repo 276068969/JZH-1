@@ -2,6 +2,7 @@ package com.carrental.controller;
 
 import com.carrental.config.JwtAuthHelper;
 import com.carrental.dto.OrderDTO;
+import com.carrental.dto.UserRentalOverviewDTO;
 import com.carrental.entity.Order;
 import com.carrental.service.OrderService;
 import com.carrental.service.VehicleService;
@@ -57,6 +58,31 @@ public class OrderController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        }
+    }
+
+    @GetMapping("/overview")
+    public ResponseEntity<?> getUserRentalOverview() {
+        try {
+            Long userId = jwtAuthHelper.getCurrentUserIdRequired();
+
+            UserRentalOverviewDTO overview = orderService.getUserRentalOverview(userId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("data", overview);
+
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> response = new HashMap<>();
+            if (e.getMessage().contains("未登录")) {
+                response.put("code", 401);
+                response.put("message", e.getMessage());
+                return ResponseEntity.status(401).body(response);
+            }
             response.put("code", 500);
             response.put("message", e.getMessage());
             return ResponseEntity.ok(response);
