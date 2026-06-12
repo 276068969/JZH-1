@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { Card, Button, Row, Col, DatePicker, message, Descriptions, Rate, Tabs, Tag, Alert, Spin } from 'antd'
-import { EnvironmentOutlined, UserOutlined, CarOutlined, CheckCircleOutlined, SwapOutlined, LoginOutlined, ReloadOutlined, ThunderboltOutlined, CalendarOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { Card, Button, Row, Col, DatePicker, message, Rate, Tabs, Tag, Alert, Spin } from 'antd'
+import { EnvironmentOutlined, UserOutlined, CarOutlined, SwapOutlined, LoginOutlined, ReloadOutlined, ThunderboltOutlined, CalendarOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
 
