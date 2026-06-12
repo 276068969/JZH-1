@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { Card, Button, Row, Col, DatePicker, message, Descriptions, Rate, Tabs, Tag, Alert, Spin } from 'antd'
-import { EnvironmentOutlined, UserOutlined, CarOutlined, CheckCircleOutlined, SwapOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons'
+import { EnvironmentOutlined, UserOutlined, CarOutlined, CheckCircleOutlined, SwapOutlined, LoginOutlined, ReloadOutlined, ThunderboltOutlined, CalendarOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
 
@@ -25,6 +25,10 @@ interface Vehicle {
   description: string
   specs: VehicleSpecs
   features: string[]
+  seats?: number
+  fuel?: string
+  transmission?: string
+  year?: number
 }
 
 interface RecommendItem {
@@ -157,9 +161,14 @@ const VehicleDetail: React.FC = () => {
       const response = await axios.get(`/api/vehicles/${id}`)
       const data = response.data?.data || response.data
       if (data) {
+        const parsedSpecs = parseSpecs(data.specs)
+        if (data.seats != null) parsedSpecs.seats = data.seats
+        if (data.fuel) parsedSpecs.fuel = data.fuel
+        if (data.transmission) parsedSpecs.transmission = data.transmission
+        if (data.year) parsedSpecs.year = data.year
         setVehicle({
           ...data,
-          specs: parseSpecs(data.specs),
+          specs: parsedSpecs,
           features: parseFeatures(data.features)
         })
       } else {
@@ -293,19 +302,79 @@ const VehicleDetail: React.FC = () => {
                   key: 'specs',
                   label: '车辆参数',
                   children: (
-                    <Descriptions bordered column={2}>
-                      <Descriptions.Item label="座位数">
-                        <UserOutlined /> {vehicle.specs.seats} 座
-                      </Descriptions.Item>
-                      <Descriptions.Item label="变速箱">
-                        <CarOutlined /> {vehicle.specs.transmission}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="燃料类型">{vehicle.specs.fuel}</Descriptions.Item>
-                      <Descriptions.Item label="年份">{vehicle.specs.year} 年</Descriptions.Item>
-                      <Descriptions.Item label="车辆位置" span={2}>
-                        <EnvironmentOutlined /> {vehicle.location}
-                      </Descriptions.Item>
-                    </Descriptions>
+                    <div>
+                      <Row gutter={[16, 16]}>
+                        <Col xs={12} sm={6}>
+                          <div style={{
+                            background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            textAlign: 'center',
+                            height: '100%'
+                          }}>
+                            <UserOutlined style={{ fontSize: '1.5rem', color: '#1890ff', marginBottom: '8px' }} />
+                            <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '4px' }}>座位数</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#1890ff' }}>{vehicle.specs.seats} 座</div>
+                          </div>
+                        </Col>
+                        <Col xs={12} sm={6}>
+                          <div style={{
+                            background: vehicle.specs.fuel === '纯电动'
+                              ? 'linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%)'
+                              : 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            textAlign: 'center',
+                            height: '100%'
+                          }}>
+                            <ThunderboltOutlined style={{ fontSize: '1.5rem', color: vehicle.specs.fuel === '纯电动' ? '#722ed1' : '#fa8c16', marginBottom: '8px' }} />
+                            <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '4px' }}>燃料类型</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: vehicle.specs.fuel === '纯电动' ? '#722ed1' : '#fa8c16' }}>
+                              {vehicle.specs.fuel === '纯电动' ? '⚡' : '⛽'} {vehicle.specs.fuel}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col xs={12} sm={6}>
+                          <div style={{
+                            background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            textAlign: 'center',
+                            height: '100%'
+                          }}>
+                            <CarOutlined style={{ fontSize: '1.5rem', color: '#52c41a', marginBottom: '8px' }} />
+                            <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '4px' }}>变速箱</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#52c41a' }}>{vehicle.specs.transmission}</div>
+                          </div>
+                        </Col>
+                        <Col xs={12} sm={6}>
+                          <div style={{
+                            background: 'linear-gradient(135deg, #f0f5ff 0%, #d6e4ff 100%)',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            textAlign: 'center',
+                            height: '100%'
+                          }}>
+                            <CalendarOutlined style={{ fontSize: '1.5rem', color: '#2f54eb', marginBottom: '8px' }} />
+                            <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '4px' }}>出厂年份</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2f54eb' }}>{vehicle.specs.year} 年</div>
+                          </div>
+                        </Col>
+                      </Row>
+                      <div style={{
+                        marginTop: '16px',
+                        padding: '16px',
+                        background: '#fafafa',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <EnvironmentOutlined style={{ fontSize: '1.25rem', color: '#667eea' }} />
+                        <span style={{ color: '#666' }}>取车地点：</span>
+                        <span style={{ fontWeight: '500' }}>{vehicle.location}</span>
+                      </div>
+                    </div>
                   )
                 },
                 {
@@ -318,9 +387,11 @@ const VehicleDetail: React.FC = () => {
                           padding: '12px',
                           background: '#f8f9fa',
                           borderRadius: '8px',
-                          textAlign: 'center'
+                          textAlign: 'center',
+                          transition: 'all 0.2s',
+                          border: '1px solid #f0f0f0'
                         }}>
-                          <CheckCircleOutlined style={{ color: '#52c41a', marginRight: '8px' }} />
+                          <SafetyCertificateOutlined style={{ color: '#52c41a', marginRight: '8px' }} />
                           {feature}
                         </div>
                       ))}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
-import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message, Slider } from 'antd'
-import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined, FilterOutlined } from '@ant-design/icons'
+import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message, Slider, Collapse, Badge } from 'antd'
+import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined, FilterOutlined, UserOutlined, ThunderboltOutlined, CarOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
 const { Search } = Input
@@ -20,11 +20,28 @@ interface Vehicle {
   description: string
   specs?: string
   features?: string
+  seats?: number
+  fuel?: string
+  transmission?: string
+  year?: number
+}
+
+interface FilterOptions {
+  seats: number[]
+  fuel: string[]
+  transmission: string[]
+  types: string[]
 }
 
 const extractCity = (location: string): string => {
   const match = location.match(/^(.+?)[市区]/)
   return match ? match[1] : location
+}
+
+const fuelLabelMap: Record<string, string> = {
+  '汽油': '⛽ 汽油',
+  '纯电动': '⚡ 纯电动',
+  '混合动力': '🔋 混合动力',
 }
 
 const VehicleList: React.FC = () => {
@@ -33,6 +50,12 @@ const VehicleList: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(false)
   const [compareIds, setCompareIds] = useState<number[]>([])
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    seats: [],
+    fuel: [],
+    transmission: [],
+    types: [],
+  })
 
   const searchText = searchParams.get('search') || ''
   const typeFilter = searchParams.get('type') || ''
@@ -42,10 +65,39 @@ const VehicleList: React.FC = () => {
   const availableFilter = searchParams.get('available') || 'true'
   const sortBy = searchParams.get('sortBy') || 'rating'
   const sortOrder = searchParams.get('sortOrder') || 'desc'
+  const seatsFilter = searchParams.get('seats') || ''
+  const fuelFilter = searchParams.get('fuel') || ''
+  const transmissionFilter = searchParams.get('transmission') || ''
+
+  useEffect(() => {
+    loadFilterOptions()
+  }, [])
 
   useEffect(() => {
     loadVehicles()
   }, [searchParams])
+
+  const loadFilterOptions = async () => {
+    try {
+      const response = await axios.get('/api/vehicles/filter-options')
+      const data = response.data?.data || response.data
+      if (data) {
+        setFilterOptions({
+          seats: data.seats || [],
+          fuel: data.fuel || [],
+          transmission: data.transmission || [],
+          types: data.types || [],
+        })
+      }
+    } catch {
+      setFilterOptions({
+        seats: [2, 5, 6, 7],
+        fuel: ['汽油', '纯电动'],
+        transmission: ['自动'],
+        types: ['电动车', '轿车', 'SUV', '跑车', 'MPV'],
+      })
+    }
+  }
 
   const loadVehicles = async () => {
     setLoading(true)
@@ -59,6 +111,9 @@ const VehicleList: React.FC = () => {
       if (availableFilter !== 'all') params.available = availableFilter === 'true'
       if (sortBy) params.sortBy = sortBy
       if (sortOrder) params.sortOrder = sortOrder
+      if (seatsFilter) params.seats = seatsFilter
+      if (fuelFilter) params.fuel = fuelFilter
+      if (transmissionFilter) params.transmission = transmissionFilter
 
       const response = await axios.get('/api/vehicles/search', { params })
       const data = response.data?.data || response.data
@@ -69,18 +124,18 @@ const VehicleList: React.FC = () => {
       }
     } catch (error) {
       const mockVehicles: Vehicle[] = [
-        { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', latitude: 39.9042, longitude: 116.4074, available: true, rating: 4.8, description: '高性能纯电动轿车，续航500公里' },
-        { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', latitude: 31.2304, longitude: 121.4737, available: true, rating: 4.9, description: '豪华商务轿车，舒适驾乘' },
-        { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', latitude: 23.1291, longitude: 113.2644, available: true, rating: 4.7, description: '科技感十足的豪华轿车' },
-        { id: 4, name: '奔驰 E级', type: '轿车', price: 429, location: '深圳市南山区', latitude: 22.5431, longitude: 114.0579, available: false, rating: 4.9, description: '尊贵舒适的商务座驾' },
-        { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', latitude: 30.2741, longitude: 120.1551, available: true, rating: 5.0, description: '极致驾驶体验，澎湃动力' },
-        { id: 6, name: '大众 途观L', type: 'SUV', price: 259, location: '成都市高新区', latitude: 30.5728, longitude: 104.0668, available: true, rating: 4.6, description: '家庭出行首选' },
-        { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', latitude: 39.9599, longitude: 116.2982, available: true, rating: 4.8, description: '明星保姆车' },
-        { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', latitude: 31.2297, longitude: 121.4498, available: true, rating: 4.7, description: '智能电动SUV' },
-        { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', latitude: 23.1252, longitude: 113.2676, available: true, rating: 4.6, description: '全能城市SUV' },
-        { id: 10, name: '比亚迪 汉', type: '电动车', price: 239, location: '深圳市福田区', latitude: 22.5431, longitude: 114.0579, available: true, rating: 4.7, description: '国产旗舰电动轿车' },
-        { id: 11, name: '本田 奥德赛', type: 'MPV', price: 329, location: '杭州市余杭区', latitude: 30.4175, longitude: 120.3046, available: true, rating: 4.5, description: '家用MPV首选' },
-        { id: 12, name: '法拉利 488', type: '跑车', price: 1999, location: '北京市朝阳区', latitude: 39.9219, longitude: 116.4435, available: false, rating: 4.9, description: '意大利超跑，激情澎湃' },
+        { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', latitude: 39.9042, longitude: 116.4074, available: true, rating: 4.8, description: '高性能纯电动轿车，续航500公里', seats: 5, fuel: '纯电动', transmission: '自动', year: 2024 },
+        { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', latitude: 31.2304, longitude: 121.4737, available: true, rating: 4.9, description: '豪华商务轿车，舒适驾乘', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', latitude: 23.1291, longitude: 113.2644, available: true, rating: 4.7, description: '科技感十足的豪华轿车', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 4, name: '奔驰 E级', type: '轿车', price: 429, location: '深圳市南山区', latitude: 22.5431, longitude: 114.0579, available: false, rating: 4.9, description: '尊贵舒适的商务座驾', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', latitude: 30.2741, longitude: 120.1551, available: true, rating: 5.0, description: '极致驾驶体验，澎湃动力', seats: 2, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 6, name: '大众 途观L', type: 'SUV', price: 259, location: '成都市高新区', latitude: 30.5728, longitude: 104.0668, available: true, rating: 4.6, description: '家庭出行首选', seats: 7, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', latitude: 39.9599, longitude: 116.2982, available: true, rating: 4.8, description: '明星保姆车', seats: 7, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', latitude: 31.2297, longitude: 121.4498, available: true, rating: 4.7, description: '智能电动SUV', seats: 6, fuel: '纯电动', transmission: '自动', year: 2024 },
+        { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', latitude: 23.1252, longitude: 113.2676, available: true, rating: 4.6, description: '全能城市SUV', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 10, name: '比亚迪 汉', type: '电动车', price: 239, location: '深圳市福田区', latitude: 22.5431, longitude: 114.0579, available: true, rating: 4.7, description: '国产旗舰电动轿车', seats: 5, fuel: '纯电动', transmission: '自动', year: 2024 },
+        { id: 11, name: '本田 奥德赛', type: 'MPV', price: 329, location: '杭州市余杭区', latitude: 30.4175, longitude: 120.3046, available: true, rating: 4.5, description: '家用MPV首选', seats: 7, fuel: '汽油', transmission: '自动', year: 2024 },
+        { id: 12, name: '法拉利 488', type: '跑车', price: 1999, location: '北京市朝阳区', latitude: 39.9219, longitude: 116.4435, available: false, rating: 4.9, description: '意大利超跑，激情澎湃', seats: 2, fuel: '汽油', transmission: '自动', year: 2024 },
       ]
       let filtered = mockVehicles
 
@@ -96,6 +151,15 @@ const VehicleList: React.FC = () => {
       }
       if (typeFilter) {
         filtered = filtered.filter(v => v.type === typeFilter)
+      }
+      if (seatsFilter) {
+        filtered = filtered.filter(v => String(v.seats) === seatsFilter)
+      }
+      if (fuelFilter) {
+        filtered = filtered.filter(v => v.fuel === fuelFilter)
+      }
+      if (transmissionFilter) {
+        filtered = filtered.filter(v => v.transmission === transmissionFilter)
       }
       if (minPrice > 0) {
         filtered = filtered.filter(v => v.price >= minPrice)
@@ -132,12 +196,13 @@ const VehicleList: React.FC = () => {
   }
 
   const vehicleTypes = useMemo(() => {
+    if (filterOptions.types.length > 0) return filterOptions.types
     const allVehicles = vehicles.length > 0 ? vehicles : [
       { type: '电动车' }, { type: '轿车' }, { type: 'SUV' }, { type: '跑车' }, { type: 'MPV' }
     ]
     const types = [...new Set(allVehicles.map(v => v.type))]
     return types
-  }, [vehicles])
+  }, [vehicles, filterOptions.types])
 
   const cities = useMemo(() => {
     const allVehicles = vehicles.length > 0 ? vehicles : [
@@ -171,8 +236,18 @@ const VehicleList: React.FC = () => {
   }
 
   const handlePriceChange = (values: number[]) => {
-    updateFilters('minPrice', values[0])
-    updateFilters('maxPrice', values[1])
+    const params = new URLSearchParams(searchParams)
+    if (values[0] > 0) {
+      params.set('minPrice', String(values[0]))
+    } else {
+      params.delete('minPrice')
+    }
+    if (values[1] < 2000) {
+      params.set('maxPrice', String(values[1]))
+    } else {
+      params.delete('maxPrice')
+    }
+    setSearchParams(params)
   }
 
   const handleAvailableChange = (value: string) => {
@@ -181,11 +256,25 @@ const VehicleList: React.FC = () => {
 
   const handleSortChange = (value: string) => {
     const [sortField, sortDir] = value.split('-')
-    updateFilters('sortBy', sortField)
-    updateFilters('sortOrder', sortDir)
+    const params = new URLSearchParams(searchParams)
+    params.set('sortBy', sortField)
+    params.set('sortOrder', sortDir)
+    setSearchParams(params)
   }
 
-  const hasActiveFilters = searchText || typeFilter || cityFilter || minPrice > 0 || maxPrice < 2000 || availableFilter !== 'true'
+  const handleSeatsChange = (value: string) => {
+    updateFilters('seats', value)
+  }
+
+  const handleFuelChange = (value: string) => {
+    updateFilters('fuel', value)
+  }
+
+  const handleTransmissionChange = (value: string) => {
+    updateFilters('transmission', value)
+  }
+
+  const hasActiveFilters = searchText || typeFilter || cityFilter || minPrice > 0 || maxPrice < 2000 || availableFilter !== 'true' || seatsFilter || fuelFilter || transmissionFilter
 
   const clearAllFilters = () => {
     setSearchParams({ sortBy: 'rating', sortOrder: 'desc' })
@@ -225,6 +314,97 @@ const VehicleList: React.FC = () => {
 
   const currentSortValue = `${sortBy}-${sortOrder}`
 
+  const specFilterItems = [
+    {
+      key: 'seats',
+      label: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <UserOutlined style={{ color: '#667eea' }} />
+          座位数
+          {seatsFilter && <Badge count={1} style={{ marginLeft: '4px' }} size="small" />}
+        </span>
+      ),
+      children: (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {filterOptions.seats.map(seats => (
+            <Button
+              key={seats}
+              size="small"
+              type={seatsFilter === String(seats) ? 'primary' : 'default'}
+              onClick={() => handleSeatsChange(seatsFilter === String(seats) ? '' : String(seats))}
+              style={{
+                borderRadius: '20px',
+                minWidth: '60px',
+                background: seatsFilter === String(seats) ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined,
+                border: seatsFilter === String(seats) ? 'none' : undefined,
+              }}
+            >
+              {seats}座
+            </Button>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'fuel',
+      label: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <ThunderboltOutlined style={{ color: '#fa8c16' }} />
+          燃料类型
+          {fuelFilter && <Badge count={1} style={{ marginLeft: '4px' }} size="small" />}
+        </span>
+      ),
+      children: (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {filterOptions.fuel.map(fuel => (
+            <Button
+              key={fuel}
+              size="small"
+              type={fuelFilter === fuel ? 'primary' : 'default'}
+              onClick={() => handleFuelChange(fuelFilter === fuel ? '' : fuel)}
+              style={{
+                borderRadius: '20px',
+                background: fuelFilter === fuel ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined,
+                border: fuelFilter === fuel ? 'none' : undefined,
+              }}
+            >
+              {fuelLabelMap[fuel] || fuel}
+            </Button>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'transmission',
+      label: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <CarOutlined style={{ color: '#52c41a' }} />
+          变速箱
+          {transmissionFilter && <Badge count={1} style={{ marginLeft: '4px' }} size="small" />}
+        </span>
+      ),
+      children: (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {filterOptions.transmission.map(t => (
+            <Button
+              key={t}
+              size="small"
+              type={transmissionFilter === t ? 'primary' : 'default'}
+              onClick={() => handleTransmissionChange(transmissionFilter === t ? '' : t)}
+              style={{
+                borderRadius: '20px',
+                background: transmissionFilter === t ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined,
+                border: transmissionFilter === t ? 'none' : undefined,
+              }}
+            >
+              {t}
+            </Button>
+          ))}
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div>
       <div style={{
@@ -250,7 +430,7 @@ const VehicleList: React.FC = () => {
               }}
             />
           </Col>
-          <Col xs={24} md={5}>
+          <Col xs={12} md={4}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <EnvironmentOutlined style={{ color: '#667eea', fontSize: '1.25rem' }} />
               <Select
@@ -267,24 +447,21 @@ const VehicleList: React.FC = () => {
               </Select>
             </div>
           </Col>
-          <Col xs={24} md={5}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>车型：</span>
-              <Select
-                value={typeFilter || undefined}
-                onChange={handleTypeChange}
-                style={{ flex: 1 }}
-                size="large"
-                placeholder="全部车型"
-                allowClear
-              >
-                {vehicleTypes.map(type => (
-                  <Option key={type} value={type}>{type}</Option>
-                ))}
-              </Select>
-            </div>
+          <Col xs={12} md={4}>
+            <Select
+              value={typeFilter || undefined}
+              onChange={handleTypeChange}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="全部车型"
+              allowClear
+            >
+              {vehicleTypes.map(type => (
+                <Option key={type} value={type}>{type}</Option>
+              ))}
+            </Select>
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={8}>
             <Select
               value={currentSortValue}
               onChange={handleSortChange}
@@ -303,7 +480,7 @@ const VehicleList: React.FC = () => {
         </Row>
 
         <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
-          <Col xs={24} md={10}>
+          <Col xs={24} md={8}>
             <div style={{ padding: '0 8px' }}>
               <div style={{ marginBottom: '8px', color: '#666', fontSize: '0.875rem' }}>
                 <FilterOutlined style={{ marginRight: '4px' }} />
@@ -326,7 +503,7 @@ const VehicleList: React.FC = () => {
               />
             </div>
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={12} md={4}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '100%' }}>
               <span style={{ color: '#666', fontSize: '0.875rem' }}>可租状态：</span>
               <Select
@@ -341,7 +518,55 @@ const VehicleList: React.FC = () => {
               </Select>
             </div>
           </Col>
+          <Col xs={12} md={4}>
+            <Select
+              value={seatsFilter || undefined}
+              onChange={handleSeatsChange}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="座位数"
+              allowClear
+            >
+              {filterOptions.seats.map(s => (
+                <Option key={s} value={String(s)}>{s}座</Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={12} md={4}>
+            <Select
+              value={fuelFilter || undefined}
+              onChange={handleFuelChange}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="燃料类型"
+              allowClear
+            >
+              {filterOptions.fuel.map(f => (
+                <Option key={f} value={f}>{fuelLabelMap[f] || f}</Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={12} md={4}>
+            <Select
+              value={transmissionFilter || undefined}
+              onChange={handleTransmissionChange}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="变速箱"
+              allowClear
+            >
+              {filterOptions.transmission.map(t => (
+                <Option key={t} value={t}>{t}</Option>
+              ))}
+            </Select>
+          </Col>
         </Row>
+
+        <Collapse
+          ghost
+          items={specFilterItems}
+          style={{ marginTop: '8px', background: '#fafafa', borderRadius: '8px' }}
+        />
 
         {hasActiveFilters && (
           <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -359,6 +584,21 @@ const VehicleList: React.FC = () => {
             {typeFilter && (
               <Tag color="purple" closable onClose={() => handleTypeChange('')}>
                 车型：{typeFilter}
+              </Tag>
+            )}
+            {seatsFilter && (
+              <Tag color="cyan" closable onClose={() => handleSeatsChange('')}>
+                座位：{seatsFilter}座
+              </Tag>
+            )}
+            {fuelFilter && (
+              <Tag color="orange" closable onClose={() => handleFuelChange('')}>
+                燃料：{fuelFilter}
+              </Tag>
+            )}
+            {transmissionFilter && (
+              <Tag color="geekblue" closable onClose={() => handleTransmissionChange('')}>
+                变速箱：{transmissionFilter}
               </Tag>
             )}
             {(minPrice > 0 || maxPrice < 2000) && (
@@ -419,7 +659,7 @@ const VehicleList: React.FC = () => {
                       {vehicle.description}
                     </p>
                     <div className="price" style={{ fontSize: '1.25rem' }}>¥{vehicle.price}/天</div>
-                    <div className="tags" style={{ marginTop: '12px' }}>
+                    <div className="tags" style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       <span style={{
                         background: '#e6f7ff',
                         color: '#1890ff',
@@ -429,20 +669,51 @@ const VehicleList: React.FC = () => {
                       }}>
                         {vehicle.type}
                       </span>
+                      {vehicle.seats && (
+                        <span style={{
+                          background: '#e6fffb',
+                          color: '#13c2c2',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          fontSize: '0.75rem'
+                        }}>
+                          {vehicle.seats}座
+                        </span>
+                      )}
+                      {vehicle.fuel && (
+                        <span style={{
+                          background: vehicle.fuel === '纯电动' ? '#f9f0ff' : '#fff7e6',
+                          color: vehicle.fuel === '纯电动' ? '#722ed1' : '#fa8c16',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          fontSize: '0.75rem'
+                        }}>
+                          {vehicle.fuel === '纯电动' ? '⚡' : '⛽'} {vehicle.fuel}
+                        </span>
+                      )}
+                      {vehicle.transmission && (
+                        <span style={{
+                          background: '#f6ffed',
+                          color: '#52c41a',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          fontSize: '0.75rem'
+                        }}>
+                          {vehicle.transmission}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <Rate disabled value={vehicle.rating} allowHalf style={{ fontSize: '0.875rem' }} />
+                        <span style={{ marginLeft: '8px', color: '#666' }}>{vehicle.rating}</span>
+                      </div>
                       <span style={{
-                        background: '#fff7e6',
-                        color: '#fa8c16',
-                        padding: '4px 12px',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        marginLeft: '8px'
+                        color: '#999',
+                        fontSize: '0.75rem'
                       }}>
                         📍 {vehicle.location}
                       </span>
-                    </div>
-                    <div style={{ marginTop: '12px' }}>
-                      <Rate disabled value={vehicle.rating} allowHalf style={{ fontSize: '0.875rem' }} />
-                      <span style={{ marginLeft: '8px', color: '#666' }}>{vehicle.rating}</span>
                     </div>
                   </div>
                 </Link>
