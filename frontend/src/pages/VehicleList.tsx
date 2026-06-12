@@ -49,6 +49,7 @@ const VehicleList: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [compareIds, setCompareIds] = useState<number[]>([])
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     seats: [],
@@ -56,6 +57,7 @@ const VehicleList: React.FC = () => {
     transmission: [],
     types: [],
   })
+  const [filterOptionsError, setFilterOptionsError] = useState<string | null>(null)
 
   const searchText = searchParams.get('search') || ''
   const typeFilter = searchParams.get('type') || ''
@@ -79,6 +81,7 @@ const VehicleList: React.FC = () => {
 
   const loadFilterOptions = async () => {
     try {
+      setFilterOptionsError(null)
       const response = await axios.get('/api/vehicles/filter-options')
       const data = response.data?.data || response.data
       if (data) {
@@ -89,19 +92,17 @@ const VehicleList: React.FC = () => {
           types: data.types || [],
         })
       }
-    } catch {
-      setFilterOptions({
-        seats: [2, 5, 6, 7],
-        fuel: ['汽油', '纯电动'],
-        transmission: ['自动'],
-        types: ['电动车', '轿车', 'SUV', '跑车', 'MPV'],
-      })
+    } catch (error: any) {
+      const errMsg = error?.response?.data?.message || error?.message || '筛选条件加载失败，请检查后端服务是否启动'
+      setFilterOptionsError(errMsg)
+      message.error('筛选条件加载失败：' + errMsg)
     }
   }
 
   const loadVehicles = async () => {
     setLoading(true)
     try {
+      setLoadError(null)
       const params: any = {}
       if (searchText) params.keyword = searchText
       if (cityFilter) params.city = cityFilter
@@ -120,76 +121,13 @@ const VehicleList: React.FC = () => {
       if (Array.isArray(data)) {
         setVehicles(data)
       } else {
-        throw new Error('No data')
+        throw new Error('接口返回格式错误：缺少 data 数组')
       }
-    } catch (error) {
-      const mockVehicles: Vehicle[] = [
-        { id: 1, name: '特斯拉 Model 3', type: '电动车', price: 299, location: '北京市朝阳区', latitude: 39.9042, longitude: 116.4074, available: true, rating: 4.8, description: '高性能纯电动轿车，续航500公里', seats: 5, fuel: '纯电动', transmission: '自动', year: 2024 },
-        { id: 2, name: '宝马 5系', type: '轿车', price: 399, location: '上海市浦东新区', latitude: 31.2304, longitude: 121.4737, available: true, rating: 4.9, description: '豪华商务轿车，舒适驾乘', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 3, name: '奥迪 A6L', type: '轿车', price: 359, location: '广州市天河区', latitude: 23.1291, longitude: 113.2644, available: true, rating: 4.7, description: '科技感十足的豪华轿车', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 4, name: '奔驰 E级', type: '轿车', price: 429, location: '深圳市南山区', latitude: 22.5431, longitude: 114.0579, available: false, rating: 4.9, description: '尊贵舒适的商务座驾', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 5, name: '保时捷 911', type: '跑车', price: 1299, location: '杭州市西湖区', latitude: 30.2741, longitude: 120.1551, available: true, rating: 5.0, description: '极致驾驶体验，澎湃动力', seats: 2, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 6, name: '大众 途观L', type: 'SUV', price: 259, location: '成都市高新区', latitude: 30.5728, longitude: 104.0668, available: true, rating: 4.6, description: '家庭出行首选', seats: 7, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 7, name: '丰田 埃尔法', type: 'MPV', price: 599, location: '北京市海淀区', latitude: 39.9599, longitude: 116.2982, available: true, rating: 4.8, description: '明星保姆车', seats: 7, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 8, name: '蔚来 ES8', type: '电动车', price: 499, location: '上海市静安区', latitude: 31.2297, longitude: 121.4498, available: true, rating: 4.7, description: '智能电动SUV', seats: 6, fuel: '纯电动', transmission: '自动', year: 2024 },
-        { id: 9, name: '奥迪 Q5L', type: 'SUV', price: 379, location: '广州市越秀区', latitude: 23.1252, longitude: 113.2676, available: true, rating: 4.6, description: '全能城市SUV', seats: 5, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 10, name: '比亚迪 汉', type: '电动车', price: 239, location: '深圳市福田区', latitude: 22.5431, longitude: 114.0579, available: true, rating: 4.7, description: '国产旗舰电动轿车', seats: 5, fuel: '纯电动', transmission: '自动', year: 2024 },
-        { id: 11, name: '本田 奥德赛', type: 'MPV', price: 329, location: '杭州市余杭区', latitude: 30.4175, longitude: 120.3046, available: true, rating: 4.5, description: '家用MPV首选', seats: 7, fuel: '汽油', transmission: '自动', year: 2024 },
-        { id: 12, name: '法拉利 488', type: '跑车', price: 1999, location: '北京市朝阳区', latitude: 39.9219, longitude: 116.4435, available: false, rating: 4.9, description: '意大利超跑，激情澎湃', seats: 2, fuel: '汽油', transmission: '自动', year: 2024 },
-      ]
-      let filtered = mockVehicles
-
-      if (searchText) {
-        filtered = filtered.filter(v =>
-          v.name.toLowerCase().includes(searchText.toLowerCase()) ||
-          v.description.toLowerCase().includes(searchText.toLowerCase()) ||
-          v.type.toLowerCase().includes(searchText.toLowerCase())
-        )
-      }
-      if (cityFilter) {
-        filtered = filtered.filter(v => extractCity(v.location) === cityFilter)
-      }
-      if (typeFilter) {
-        filtered = filtered.filter(v => v.type === typeFilter)
-      }
-      if (seatsFilter) {
-        filtered = filtered.filter(v => String(v.seats) === seatsFilter)
-      }
-      if (fuelFilter) {
-        filtered = filtered.filter(v => v.fuel === fuelFilter)
-      }
-      if (transmissionFilter) {
-        filtered = filtered.filter(v => v.transmission === transmissionFilter)
-      }
-      if (minPrice > 0) {
-        filtered = filtered.filter(v => v.price >= minPrice)
-      }
-      if (maxPrice < 2000) {
-        filtered = filtered.filter(v => v.price <= maxPrice)
-      }
-      if (availableFilter !== 'all') {
-        filtered = filtered.filter(v => v.available === (availableFilter === 'true'))
-      }
-
-      filtered.sort((a, b) => {
-        let result = 0
-        switch (sortBy) {
-          case 'price':
-            result = a.price - b.price
-            break
-          case 'rating':
-            result = a.rating - b.rating
-            break
-          case 'name':
-            result = a.name.localeCompare(b.name)
-            break
-          default:
-            result = a.rating - b.rating
-        }
-        return sortOrder === 'asc' ? result : -result
-      })
-
-      setVehicles(filtered)
+    } catch (error: any) {
+      const errMsg = error?.response?.data?.message || error?.message || '车辆列表加载失败，请检查后端服务是否正常'
+      setLoadError(errMsg)
+      setVehicles([])
+      message.error('车辆列表加载失败：' + errMsg)
     } finally {
       setLoading(false)
     }
@@ -562,6 +500,30 @@ const VehicleList: React.FC = () => {
           </Col>
         </Row>
 
+        {filterOptionsError && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: '#fff2e8',
+              border: '1px solid #ffa940',
+              borderRadius: '8px',
+              color: '#d4380d',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}
+          >
+            <span style={{ fontSize: '1.25rem' }}>⚠️</span>
+            <div style={{ flex: 1, fontSize: '0.875rem' }}>
+              筛选条件加载失败：{filterOptionsError}
+            </div>
+            <Button size="small" type="primary" onClick={loadFilterOptions}>
+              重试加载
+            </Button>
+          </div>
+        )}
+
         <Collapse
           ghost
           items={specFilterItems}
@@ -619,9 +581,35 @@ const VehicleList: React.FC = () => {
       </div>
 
       <div style={{ background: 'white', padding: '32px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>
-          共找到 {vehicles.length} 辆车
-        </h2>
+        {loadError ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>❌</div>
+            <h3 style={{ color: '#cf1322', marginBottom: '12px' }}>车辆列表加载失败</h3>
+            <p style={{ color: '#666', marginBottom: '20px', maxWidth: '500px', marginLeft: 'auto', marginRight: 'auto' }}>
+              {loadError}
+            </p>
+            <p style={{ color: '#999', fontSize: '0.875rem', marginBottom: '24px' }}>
+              请检查后端服务是否正常启动，或联系运维
+            </p>
+            <Button
+              type="primary"
+              size="large"
+              onClick={loadVehicles}
+              loading={loading}
+              icon={<ReloadOutlined />}
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+              }}
+            >
+              重试加载
+            </Button>
+          </div>
+        ) : (
+          <>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>
+              共找到 {vehicles.length} 辆车
+            </h2>
         <Row gutter={[24, 24]}>
           {vehicles.map(vehicle => (
             <Col xs={24} sm={12} lg={8} key={vehicle.id}>
@@ -728,6 +716,8 @@ const VehicleList: React.FC = () => {
             <p>暂无符合条件的车辆</p>
             <p style={{ fontSize: '0.875rem' }}>试试调整筛选条件？</p>
           </div>
+        )}
+          </>
         )}
       </div>
 

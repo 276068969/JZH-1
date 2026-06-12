@@ -1,8 +1,7 @@
 # ============================================================
 # 前端构建阶段 - 使用多阶段构建优化缓存
 # ============================================================
-ARG DOCKER_REGISTRY=docker.io/library
-FROM ${DOCKER_REGISTRY}/node:18-alpine AS builder
+FROM node:18-alpine AS builder
 
 # 设置 npm 镜像源
 RUN npm config set registry https://registry.npmmirror.com
@@ -24,7 +23,7 @@ RUN npm run build
 # ============================================================
 # Nginx 运行阶段
 # ============================================================
-FROM ${DOCKER_REGISTRY}/nginx:alpine
+FROM nginx:alpine
 
 # 移除默认配置
 RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*

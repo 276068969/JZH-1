@@ -1,8 +1,7 @@
 # ============================================================
 # 后端构建阶段 - 使用 Maven 多阶段构建
 # ============================================================
-ARG DOCKER_REGISTRY=docker.io/library
-FROM ${DOCKER_REGISTRY}/maven:3.8.6-openjdk-17 AS builder
+FROM maven:3.8.6-openjdk-17 AS builder
 
 # 仅在 Alpine 基础镜像下替换 apk 源；当前 Maven 镜像可能并不提供该文件
 RUN if [ -f /etc/apk/repositories ]; then sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories; fi
@@ -38,7 +37,7 @@ RUN mvn clean package -DskipTests -B
 # ============================================================
 # 运行时阶段
 # ============================================================
-FROM ${DOCKER_REGISTRY}/openjdk:17-slim
+FROM openjdk:17-slim
 
 WORKDIR /app
 
