@@ -33,6 +33,14 @@ public class Vehicle {
 
     private String features;
 
+    private Integer seats;
+
+    private String fuel;
+
+    private String transmission;
+
+    private Integer year;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

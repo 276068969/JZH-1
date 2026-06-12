@@ -13,9 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -91,6 +89,18 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
             wrapper.eq(Vehicle::getAvailable, request.getAvailable());
         }
 
+        if (request.getSeats() != null) {
+            wrapper.eq(Vehicle::getSeats, request.getSeats());
+        }
+
+        if (request.getFuel() != null && !request.getFuel().isEmpty()) {
+            wrapper.eq(Vehicle::getFuel, request.getFuel());
+        }
+
+        if (request.getTransmission() != null && !request.getTransmission().isEmpty()) {
+            wrapper.eq(Vehicle::getTransmission, request.getTransmission());
+        }
+
         boolean isDistanceSort = "distance".equals(request.getSortBy())
                 && request.getUserLatitude() != null
                 && request.getUserLongitude() != null;
@@ -146,6 +156,52 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         return vehicles;
     }
 
+    @Override
+    public Map<String, Object> getFilterOptions() {
+        List<Vehicle> allVehicles = this.list();
+        if (allVehicles.isEmpty()) {
+            allVehicles = getMockVehicles();
+        }
+
+        List<Integer> seatsOptions = allVehicles.stream()
+                .map(Vehicle::getSeats)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        List<String> fuelOptions = allVehicles.stream()
+                .map(Vehicle::getFuel)
+                .filter(Objects::nonNull)
+                .filter(f -> !f.isEmpty())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        List<String> transmissionOptions = allVehicles.stream()
+                .map(Vehicle::getTransmission)
+                .filter(Objects::nonNull)
+                .filter(t -> !t.isEmpty())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        List<String> typeOptions = allVehicles.stream()
+                .map(Vehicle::getType)
+                .filter(Objects::nonNull)
+                .filter(t -> !t.isEmpty())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        Map<String, Object> options = new HashMap<>();
+        options.put("seats", seatsOptions);
+        options.put("fuel", fuelOptions);
+        options.put("transmission", transmissionOptions);
+        options.put("types", typeOptions);
+        return options;
+    }
+
     private List<Vehicle> filterMockVehicles(VehicleSearchRequest request) {
         List<Vehicle> allVehicles = getMockVehicles();
 
@@ -172,6 +228,15 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
                     }
                     if (request.getAvailable() != null) {
                         if (!v.getAvailable().equals(request.getAvailable())) return false;
+                    }
+                    if (request.getSeats() != null) {
+                        if (!request.getSeats().equals(v.getSeats())) return false;
+                    }
+                    if (request.getFuel() != null && !request.getFuel().isEmpty()) {
+                        if (!request.getFuel().equals(v.getFuel())) return false;
+                    }
+                    if (request.getTransmission() != null && !request.getTransmission().isEmpty()) {
+                        if (!request.getTransmission().equals(v.getTransmission())) return false;
                     }
                     return true;
                 })
@@ -221,6 +286,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v1.setDescription("高性能纯电动轿车，续航500公里");
         v1.setSpecs("座位数:5|变速箱:自动|燃料:纯电动|年份:2024");
         v1.setFeatures("自动驾驶,全景天窗,智能互联,快速充电,辅助泊车,OTA升级");
+        v1.setSeats(5);
+        v1.setFuel("纯电动");
+        v1.setTransmission("自动");
+        v1.setYear(2024);
 
         Vehicle v2 = new Vehicle();
         v2.setId(2L);
@@ -235,6 +304,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v2.setDescription("豪华商务轿车，舒适驾乘");
         v2.setSpecs("座位数:5|变速箱:自动|燃料:汽油|年份:2024");
         v2.setFeatures("真皮座椅,导航系统,全景天窗,氛围灯,哈曼卡顿音响");
+        v2.setSeats(5);
+        v2.setFuel("汽油");
+        v2.setTransmission("自动");
+        v2.setYear(2024);
 
         Vehicle v3 = new Vehicle();
         v3.setId(3L);
@@ -249,6 +322,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v3.setDescription("极致驾驶体验，澎湃动力");
         v3.setSpecs("座位数:2|变速箱:自动|燃料:汽油|年份:2024");
         v3.setFeatures("运动排气,碳陶瓷刹车,Sport Chrono组件,动力转向升级");
+        v3.setSeats(2);
+        v3.setFuel("汽油");
+        v3.setTransmission("自动");
+        v3.setYear(2024);
 
         Vehicle v4 = new Vehicle();
         v4.setId(4L);
@@ -263,6 +340,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v4.setDescription("科技感十足的豪华轿车");
         v4.setSpecs("座位数:5|变速箱:自动|燃料:汽油|年份:2024");
         v4.setFeatures("虚拟座舱,矩阵LED大灯,自适应巡航,BOSE音响");
+        v4.setSeats(5);
+        v4.setFuel("汽油");
+        v4.setTransmission("自动");
+        v4.setYear(2024);
 
         Vehicle v5 = new Vehicle();
         v5.setId(5L);
@@ -277,6 +358,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v5.setDescription("尊贵舒适的商务座驾");
         v5.setSpecs("座位数:5|变速箱:自动|燃料:汽油|年份:2024");
         v5.setFeatures("柏林之声音响,64色氛围灯,真皮座椅,后排娱乐");
+        v5.setSeats(5);
+        v5.setFuel("汽油");
+        v5.setTransmission("自动");
+        v5.setYear(2024);
 
         Vehicle v6 = new Vehicle();
         v6.setId(6L);
@@ -291,6 +376,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v6.setDescription("家庭出行首选");
         v6.setSpecs("座位数:5|变速箱:自动|燃料:汽油|年份:2024");
         v6.setFeatures("大空间,全景天窗,倒车影像,定速巡航");
+        v6.setSeats(7);
+        v6.setFuel("汽油");
+        v6.setTransmission("自动");
+        v6.setYear(2024);
 
         Vehicle v7 = new Vehicle();
         v7.setId(7L);
@@ -305,6 +394,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v7.setDescription("明星保姆车");
         v7.setSpecs("座位数:7|变速箱:自动|燃料:汽油|年份:2024");
         v7.setFeatures("航空座椅,电动侧滑门,后排娱乐,冰箱");
+        v7.setSeats(7);
+        v7.setFuel("汽油");
+        v7.setTransmission("自动");
+        v7.setYear(2024);
 
         Vehicle v8 = new Vehicle();
         v8.setId(8L);
@@ -319,6 +412,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v8.setDescription("智能电动SUV");
         v8.setSpecs("座位数:6|变速箱:自动|燃料:纯电动|年份:2024");
         v8.setFeatures("换电技术,女王副驾,NOMI智能助手,自动驾驶");
+        v8.setSeats(6);
+        v8.setFuel("纯电动");
+        v8.setTransmission("自动");
+        v8.setYear(2024);
 
         Vehicle v9 = new Vehicle();
         v9.setId(9L);
@@ -333,6 +430,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v9.setDescription("全能城市SUV");
         v9.setSpecs("座位数:5|变速箱:自动|燃料:汽油|年份:2024");
         v9.setFeatures("quattro四驱,虚拟座舱,全景天窗,自适应巡航");
+        v9.setSeats(5);
+        v9.setFuel("汽油");
+        v9.setTransmission("自动");
+        v9.setYear(2024);
 
         Vehicle v10 = new Vehicle();
         v10.setId(10L);
@@ -347,6 +448,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v10.setDescription("国产旗舰电动轿车");
         v10.setSpecs("座位数:5|变速箱:自动|燃料:纯电动|年份:2024");
         v10.setFeatures("刀片电池,DiPilot智能驾驶,丹拿音响,全景天幕");
+        v10.setSeats(5);
+        v10.setFuel("纯电动");
+        v10.setTransmission("自动");
+        v10.setYear(2024);
 
         Vehicle v11 = new Vehicle();
         v11.setId(11L);
@@ -361,6 +466,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v11.setDescription("家用MPV首选");
         v11.setSpecs("座位数:7|变速箱:自动|燃料:汽油|年份:2024");
         v11.setFeatures("魔术门,电动座椅,倒车影像,定速巡航");
+        v11.setSeats(7);
+        v11.setFuel("汽油");
+        v11.setTransmission("自动");
+        v11.setYear(2024);
 
         Vehicle v12 = new Vehicle();
         v12.setId(12L);
@@ -375,6 +484,10 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         v12.setDescription("意大利超跑，激情澎湃");
         v12.setSpecs("座位数:2|变速箱:自动|燃料:汽油|年份:2024");
         v12.setFeatures("V8双涡轮,碳陶瓷刹车,运动排气,敞篷");
+        v12.setSeats(2);
+        v12.setFuel("汽油");
+        v12.setTransmission("自动");
+        v12.setYear(2024);
 
         return Arrays.asList(v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12);
     }

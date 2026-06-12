@@ -15,4 +15,7 @@ public class VehicleSearchRequest {
     private String sortOrder;
     private Double userLatitude;
     private Double userLongitude;
+    private Integer seats;
+    private String fuel;
+    private String transmission;
 }

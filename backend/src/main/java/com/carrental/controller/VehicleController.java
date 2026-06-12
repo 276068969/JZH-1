@@ -54,7 +54,10 @@ public class VehicleController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortOrder,
             @RequestParam(required = false) Double userLat,
-            @RequestParam(required = false) Double userLng) {
+            @RequestParam(required = false) Double userLng,
+            @RequestParam(required = false) Integer seats,
+            @RequestParam(required = false) String fuel,
+            @RequestParam(required = false) String transmission) {
         VehicleSearchRequest request = new VehicleSearchRequest();
         request.setKeyword(keyword);
         request.setCity(city);
@@ -66,6 +69,9 @@ public class VehicleController {
         request.setSortOrder(sortOrder);
         request.setUserLatitude(userLat);
         request.setUserLongitude(userLng);
+        request.setSeats(seats);
+        request.setFuel(fuel);
+        request.setTransmission(transmission);
 
         List<Vehicle> vehicles = vehicleService.searchVehicles(request);
 
@@ -87,7 +93,10 @@ public class VehicleController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortOrder,
             @RequestParam(required = false) Double userLat,
-            @RequestParam(required = false) Double userLng) {
+            @RequestParam(required = false) Double userLng,
+            @RequestParam(required = false) Integer seats,
+            @RequestParam(required = false) String fuel,
+            @RequestParam(required = false) String transmission) {
         VehicleSearchRequest request = new VehicleSearchRequest();
         request.setKeyword(keyword);
         request.setCity(city);
@@ -99,12 +108,26 @@ public class VehicleController {
         request.setSortOrder(sortOrder);
         request.setUserLatitude(userLat);
         request.setUserLongitude(userLng);
+        request.setSeats(seats);
+        request.setFuel(fuel);
+        request.setTransmission(transmission);
 
         List<Vehicle> vehicles = vehicleService.searchVehicles(request);
 
         Map<String, Object> response = new HashMap<>();
         response.put("code", 200);
         response.put("data", vehicles);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/filter-options")
+    public ResponseEntity<?> getFilterOptions() {
+        Map<String, Object> options = vehicleService.getFilterOptions();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("code", 200);
+        response.put("data", options);
 
         return ResponseEntity.ok(response);
     }
