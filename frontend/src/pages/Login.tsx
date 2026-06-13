@@ -100,8 +100,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         color: '#666'
       }}>
         <strong>测试账号：</strong><br />
-        用户名：admin<br />
-        密码：admin123
+        企业用户：admin / admin123<br />
+        个人用户：test / test123
       </div>
     </div>
   )

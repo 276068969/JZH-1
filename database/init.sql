@@ -64,6 +64,11 @@ CREATE TABLE IF NOT EXISTS `orders` (
   FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 测试账号说明：以下为初始测试账号数据
+-- 注意：应用启动时 TestAccountInitializer 会自动校验密码，如密码不匹配会自动重置为默认值
+-- 默认账号：
+--   企业用户：admin / admin123
+--   个人用户：test / test123
 INSERT INTO `users` (`username`, `password`, `email`, `phone`, `user_type`) VALUES
 ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', 'admin@carrental.com', '13800138000', 'enterprise'),
 ('test', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', 'test@carrental.com', '13900139000', 'personal');
