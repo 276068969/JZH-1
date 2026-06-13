@@ -19,7 +19,11 @@ import {
   PhoneOutlined,
   MailOutlined,
   SafetyCertificateOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  RepeatOutlined,
+  RightOutlined,
+  ArrowRightOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
@@ -95,6 +99,14 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
   const [renewCheckResult, setRenewCheckResult] = useState<RenewCheckResult | null>(null)
   const [checkingAvailability, setCheckingAvailability] = useState(false)
   const [confirmingRenew, setConfirmingRenew] = useState(false)
+
+  const [reRentModalVisible, setReRentModalVisible] = useState(false)
+  const [reRentOrder, setReRentOrder] = useState<Order | null>(null)
+  const [reRentDays, setReRentDays] = useState<number>(0)
+  const [reRentStartDate, setReRentStartDate] = useState<Dayjs | null>(null)
+  const [reRentEndDate, setReRentEndDate] = useState<Dayjs | null>(null)
+  const [checkingReRentAvailability, setCheckingReRentAvailability] = useState(false)
+  const [reRentAvailable, setReRentAvailable] = useState<boolean | null>(null)
 
   const [applications, setApplications] = useState<EnterpriseApplication[]>([])
   const [loadingApplications, setLoadingApplications] = useState(false)
@@ -263,6 +275,92 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
     }
   }
 
+  const handleReRent = (order: Order) => {
+    const start = dayjs(order.startDate)
+    const end = dayjs(order.endDate)
+    const days = end.diff(start, 'day') + 1
+    const defaultStart = dayjs().add(1, 'day')
+    const defaultEnd = defaultStart.add(days - 1, 'day')
+
+    setReRentOrder(order)
+    setReRentDays(days)
+    setReRentStartDate(defaultStart)
+    setReRentEndDate(defaultEnd)
+    setReRentAvailable(null)
+    setReRentModalVisible(true)
+
+    checkReRentAvailability(order.vehicleId, defaultStart, defaultEnd)
+  }
+
+  const checkReRentAvailability = async (vehicleId: number, start: Dayjs, end: Dayjs) => {
+    setCheckingReRentAvailability(true)
+    setReRentAvailable(null)
+    try {
+      const response = await axios.get(`/api/vehicles/${vehicleId}`)
+      const vehicle = response.data?.data || response.data
+      if (vehicle && vehicle.available) {
+        setReRentAvailable(true)
+      } else {
+        setReRentAvailable(false)
+      }
+    } catch (error: any) {
+      setReRentAvailable(false)
+      message.error(error.response?.data?.message || '查询车辆状态失败')
+    } finally {
+      setCheckingReRentAvailability(false)
+    }
+  }
+
+  const handleReRentStartDateChange = (date: Dayjs | null) => {
+    if (!date) return
+    setReRentStartDate(date)
+    if (reRentDays > 0) {
+      const newEnd = date.add(reRentDays - 1, 'day')
+      setReRentEndDate(newEnd)
+      if (reRentOrder) {
+        checkReRentAvailability(reRentOrder.vehicleId, date, newEnd)
+      }
+    }
+  }
+
+  const handleReRentDaysChange = (days: number) => {
+    setReRentDays(days)
+    if (reRentStartDate) {
+      const newEnd = reRentStartDate.add(days - 1, 'day')
+      setReRentEndDate(newEnd)
+      if (reRentOrder) {
+        checkReRentAvailability(reRentOrder.vehicleId, reRentStartDate, newEnd)
+      }
+    }
+  }
+
+  const handleConfirmReRent = () => {
+    if (!reRentOrder || !reRentStartDate || !reRentEndDate || !reRentAvailable) {
+      message.warning('请选择有效的租车时间')
+      return
+    }
+
+    navigate(`/vehicles/${reRentOrder.vehicleId}`, {
+      state: {
+        fromReRent: true,
+        orderId: reRentOrder.id,
+        startDate: reRentStartDate.format('YYYY-MM-DD'),
+        endDate: reRentEndDate.format('YYYY-MM-DD'),
+        days: reRentDays,
+        originalOrder: {
+          id: reRentOrder.id,
+          vehicleName: reRentOrder.vehicleName,
+          totalPrice: reRentOrder.totalPrice
+        }
+      }
+    })
+  }
+
+  const calculateReRentPrice = () => {
+    if (!reRentOrder || reRentDays <= 0) return 0
+    return reRentOrder.vehiclePrice * reRentDays
+  }
+
   const getOrderStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: 'orange',
@@ -381,6 +479,16 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
               onClick={() => handleRenew(record)}
             >
               续租
+            </Button>
+          )}
+          {record.status === 'completed' && (
+            <Button
+              type="link"
+              icon={<RepeatOutlined />}
+              style={{ color: '#52c41a' }}
+              onClick={() => handleReRent(record)}
+            >
+              复租
             </Button>
           )}
           {record.status === 'pending' && (
@@ -542,6 +650,7 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
           }}
           onCancel={handleCancel}
           onRenew={handleRenew}
+          onReRent={handleReRent}
         />
       )
     }
@@ -1104,6 +1213,197 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
                 </Descriptions>
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <RepeatOutlined style={{ color: '#52c41a' }} />
+            <span>历史订单复租向导</span>
+          </div>
+        }
+        open={reRentModalVisible}
+        onCancel={() => setReRentModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setReRentModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            disabled={!reRentAvailable || checkingReRentAvailability}
+            onClick={handleConfirmReRent}
+            style={{ background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)', border: 'none' }}
+          >
+            <ArrowRightOutlined />
+            前往车辆详情确认
+          </Button>
+        ]}
+        width={600}
+        maskClosable={false}
+      >
+        {reRentOrder && (
+          <div>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+                borderRadius: '8px',
+                padding: '20px',
+                marginBottom: '20px',
+                border: '1px solid #b7eb8f'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <CarOutlined style={{ fontSize: '1.5rem', color: '#52c41a' }} />
+                <span style={{ fontSize: '1.25rem', fontWeight: '600' }}>{reRentOrder.vehicleName}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.875rem', color: '#666' }}>
+                <span>{reRentOrder.vehicleType}</span>
+                <span>•</span>
+                <span><StarOutlined /> {reRentOrder.vehicleRating}</span>
+                <span>•</span>
+                <span><EnvironmentOutlined /> {reRentOrder.vehicleLocation}</span>
+              </div>
+            </div>
+
+            <Alert
+              message="已为您自动带入上次的租期偏好"
+              description="系统根据您的历史订单，自动填充了同款车辆和相同租期，您可以调整后继续下单。"
+              type="success"
+              showIcon
+              icon={<CheckCircleOutlined />}
+              style={{ marginBottom: '20px', borderRadius: '8px' }}
+            />
+
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: '20px' }}>
+              <Descriptions.Item label="历史订单号">
+                #{reRentOrder.id.toString().padStart(6, '0')}
+              </Descriptions.Item>
+              <Descriptions.Item label="上次租期">
+                <CalendarOutlined style={{ marginRight: '6px', color: '#52c41a' }} />
+                {formatDate(reRentOrder.startDate)} 至 {formatDate(reRentOrder.endDate)}
+                <Tag color="green" style={{ marginLeft: '8px' }}>
+                  共 {reRentDays} 天
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="上次订单总价">
+                ¥{reRentOrder.totalPrice}
+              </Descriptions.Item>
+              <Descriptions.Item label="日租金">
+                <span style={{ color: '#ff4d4f', fontWeight: '500' }}>¥{reRentOrder.vehiclePrice}/天</span>
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider orientation="left" style={{ margin: '12px 0 16px 0' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CalendarOutlined style={{ color: '#52c41a' }} />
+                本次租车计划
+              </span>
+            </Divider>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                选择取车日期
+              </label>
+              <DatePicker
+                style={{ width: '100%' }}
+                placeholder="请选择取车日期"
+                value={reRentStartDate}
+                onChange={handleReRentStartDateChange}
+                disabledDate={(current) => {
+                  return current && current < dayjs().endOf('day')
+                }}
+                size="large"
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+                选择租期
+              </label>
+              <Radio.Group
+                value={reRentDays}
+                onChange={(e) => handleReRentDaysChange(e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <Row gutter={[8, 8]}>
+                  {[1, 2, 3, 5, 7, 15, 30].map(days => (
+                    <Col span={8} key={days}>
+                      <Radio.Button value={days} style={{ width: '100%', textAlign: 'center' }}>
+                        {days} 天
+                        {days === reRentDays && (
+                          <Tag color="green" style={{ marginLeft: '4px', fontSize: '0.75rem' }}>
+                            上次租期
+                          </Tag>
+                        )}
+                      </Radio.Button>
+                    </Col>
+                  ))}
+                </Row>
+              </Radio.Group>
+            </div>
+
+            {reRentStartDate && reRentEndDate && (
+              <div style={{ marginBottom: '16px', padding: '12px', background: '#f8f9fa', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span>取车日期</span>
+                  <span style={{ fontWeight: '500', color: '#52c41a' }}>
+                    {reRentStartDate.format('YYYY-MM-DD')}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span>还车日期</span>
+                  <span style={{ fontWeight: '500', color: '#764ba2' }}>
+                    {reRentEndDate.format('YYYY-MM-DD')}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span>租用天数</span>
+                  <span>{reRentDays} 天</span>
+                </div>
+                <div style={{ borderTop: '1px dashed #e0e0e0', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', fontWeight: 'bold' }}>
+                  <span>预估总价</span>
+                  <span style={{ color: '#ff4d4f' }}>¥{calculateReRentPrice()}</span>
+                </div>
+              </div>
+            )}
+
+            {checkingReRentAvailability && (
+              <Alert
+                message="正在检查车辆可用性..."
+                type="info"
+                showIcon
+                style={{ marginBottom: '16px' }}
+              />
+            )}
+
+            {!checkingReRentAvailability && reRentAvailable !== null && (
+              reRentAvailable ? (
+                <Alert
+                  message="车辆状态良好，可立即预订"
+                  type="success"
+                  showIcon
+                  icon={<CheckCircleOutlined />}
+                  style={{ marginBottom: '16px' }}
+                />
+              ) : (
+                <Alert
+                  message="抱歉，该车辆当前不可租用"
+                  description="车辆可能已被预订或暂时下线，您可以选择其他车辆或调整租期。"
+                  type="error"
+                  showIcon
+                  icon={<CloseCircleOutlined />}
+                  style={{ marginBottom: '16px' }}
+                />
+              )
+            )}
+
+            <div style={{ fontSize: '0.75rem', color: '#999', textAlign: 'center' }}>
+              <InfoCircleOutlined style={{ marginRight: '4px' }} />
+              点击"前往车辆详情确认"后，您可以在车辆详情页最终确认并提交订单
+            </div>
           </div>
         )}
       </Modal>

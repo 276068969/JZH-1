@@ -8,7 +8,8 @@ import {
   StarOutlined,
   DeleteOutlined,
   InfoCircleOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  RepeatOutlined
 } from '@ant-design/icons'
 
 export interface OrderItem {
@@ -34,6 +35,7 @@ interface OrderTimelineProps {
   onViewDetail?: (order: OrderItem) => void
   onCancel?: (orderId: number) => void
   onRenew?: (order: OrderItem) => void
+  onReRent?: (order: OrderItem) => void
 }
 
 const getStatusConfig = (status: string) => {
@@ -143,7 +145,8 @@ const OrderCard: React.FC<{
   onViewDetail?: (order: OrderItem) => void
   onCancel?: (orderId: number) => void
   onRenew?: (order: OrderItem) => void
-}> = ({ order, onViewDetail, onCancel, onRenew }) => {
+  onReRent?: (order: OrderItem) => void
+}> = ({ order, onViewDetail, onCancel, onRenew, onReRent }) => {
   const statusConfig = getStatusConfig(order.status)
   const startInfo = formatDate(order.startDate)
   const endInfo = formatDate(order.endDate)
@@ -292,6 +295,20 @@ const OrderCard: React.FC<{
               续租
             </Button>
           )}
+          {order.status === 'completed' && onReRent && (
+            <Button
+              type="text"
+              size="small"
+              icon={<RepeatOutlined />}
+              style={{ color: '#52c41a' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onReRent(order)
+              }}
+            >
+              复租
+            </Button>
+          )}
           {order.status === 'pending' && onCancel && (
             <Button
               type="text"
@@ -355,7 +372,7 @@ const SectionHeader: React.FC<{
   </div>
 )
 
-const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDetail, onCancel, onRenew }) => {
+const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDetail, onCancel, onRenew, onReRent }) => {
   const { upcoming, active, completed } = groupOrders(orders)
 
   return (
@@ -375,6 +392,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               onViewDetail={onViewDetail}
               onCancel={onCancel}
               onRenew={onRenew}
+              onReRent={onReRent}
             />
           ))}
         </div>
@@ -395,6 +413,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               onViewDetail={onViewDetail}
               onCancel={onCancel}
               onRenew={onRenew}
+              onReRent={onReRent}
             />
           ))}
         </div>
@@ -415,6 +434,7 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               onViewDetail={onViewDetail}
               onCancel={onCancel}
               onRenew={onRenew}
+              onReRent={onReRent}
             />
           ))}
         </div>

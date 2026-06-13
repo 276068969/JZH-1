@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Card, Button, Row, Col, DatePicker, message, Rate, Tabs, Tag, Alert, Spin } from 'antd'
-import { EnvironmentOutlined, UserOutlined, CarOutlined, SwapOutlined, LoginOutlined, ReloadOutlined, ThunderboltOutlined, CalendarOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { EnvironmentOutlined, UserOutlined, CarOutlined, SwapOutlined, LoginOutlined, ReloadOutlined, ThunderboltOutlined, CalendarOutlined, SafetyCertificateOutlined, RepeatOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
 
@@ -35,6 +35,19 @@ interface RecommendItem {
   vehicle: Vehicle
   score: number
   reason: string
+}
+
+interface ReRentState {
+  fromReRent: boolean
+  orderId: number
+  startDate: string
+  endDate: string
+  days: number
+  originalOrder: {
+    id: number
+    vehicleName: string
+    totalPrice: number
+  }
 }
 
 const parseSpecs = (specs: string | VehicleSpecs): VehicleSpecs => {
@@ -72,6 +85,7 @@ const parseFeatures = (features: string | string[]): string[] => {
 const VehicleDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
   const [dates, setDates] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -81,6 +95,7 @@ const VehicleDetail: React.FC = () => {
   const [recommendedVehicles, setRecommendedVehicles] = useState<RecommendItem[]>([])
   const [recommendLoading, setRecommendLoading] = useState(true)
   const [recommendError, setRecommendError] = useState<string | null>(null)
+  const [reRentInfo, setReRentInfo] = useState<ReRentState | null>(null)
 
   useEffect(() => {
     const saved = localStorage.getItem('compareList')
@@ -96,6 +111,14 @@ const VehicleDetail: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('compareList', JSON.stringify(compareList))
   }, [compareList])
+
+  useEffect(() => {
+    const state = location.state as ReRentState | null
+    if (state?.fromReRent && state.startDate && state.endDate) {
+      setReRentInfo(state)
+      setDates([dayjs(state.startDate), dayjs(state.endDate)])
+    }
+  }, [location.state])
 
   const isInCompare = compareList.includes(Number(id))
 
@@ -403,6 +426,31 @@ const VehicleDetail: React.FC = () => {
           </Col>
 
           <Col xs={24} lg={8}>
+            {reRentInfo && (
+              <Alert
+                message={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <RepeatOutlined style={{ color: '#52c41a' }} />
+                    <span>复租订单确认</span>
+                  </div>
+                }
+                description={
+                  <div>
+                    <div style={{ marginBottom: '4px' }}>
+                      您正在复租历史订单 <strong>#{reRentInfo.originalOrder.id.toString().padStart(6, '0')}</strong> 的同款车辆
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                      上次租期：{reRentInfo.days} 天 · 上次总价：¥{reRentInfo.originalOrder.totalPrice}
+                    </div>
+                  </div>
+                }
+                type="success"
+                showIcon
+                closable
+                onClose={() => setReRentInfo(null)}
+                style={{ marginBottom: '16px', borderRadius: '8px' }}
+              />
+            )}
             <Card style={{
               position: 'sticky',
               top: '100px',
