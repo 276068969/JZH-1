@@ -39,16 +39,22 @@ function App() {
         setUserInfo(response.data.data)
       } else {
         setUserInfo(null)
+        localStorage.removeItem('token')
+        setIsAuthenticated(false)
       }
-    } catch (error) {
+    } catch (error: any) {
       setUserInfo(null)
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token')
+        setIsAuthenticated(false)
+      }
     } finally {
       setLoadingUser(false)
     }
   }
 
   useEffect(() => {
-    const interceptor = axios.interceptors.request.use((config) => {
+    const requestInterceptor = axios.interceptors.request.use((config) => {
       const token = localStorage.getItem('token')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
@@ -56,8 +62,21 @@ function App() {
       return config
     })
 
+    const responseInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          localStorage.removeItem('token')
+          setIsAuthenticated(false)
+          setUserInfo(null)
+        }
+        return Promise.reject(error)
+      }
+    )
+
     return () => {
-      axios.interceptors.request.eject(interceptor)
+      axios.interceptors.request.eject(requestInterceptor)
+      axios.interceptors.response.eject(responseInterceptor)
     }
   }, [])
 

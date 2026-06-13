@@ -35,7 +35,7 @@ mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
 
 jwt:
-  secret: ${JWT_SECRET:carRentalPlatformSecretKey2026VeryLongAndSecure}
+  secret: ${JWT_SECRET:carRentalPlatformSecretKey2026VeryLongAndSecureKeyForJwtHs512AlgorithmMinimum64Bytes}
   expiration: ${JWT_EXPIRATION:86400000}
 
 logging:

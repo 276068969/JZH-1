@@ -12,15 +12,22 @@ const Register: React.FC = () => {
   const onFinish = async (values: any) => {
     setLoading(true)
     try {
-      await axios.post('/api/auth/register', {
+      const response = await axios.post('/api/auth/register', {
         ...values,
         userType
       })
-      message.success('注册成功！请登录')
-      navigate('/login')
-    } catch (error) {
-      message.success('注册成功！请登录')
-      navigate('/login')
+      const code = response.data?.code
+      const messageText = response.data?.message
+
+      if (code === 200) {
+        message.success('注册成功！请登录')
+        navigate('/login')
+      } else {
+        throw new Error(messageText || '注册失败')
+      }
+    } catch (error: any) {
+      const msg = error.response?.data?.message || error.message || '注册失败，请稍后重试'
+      message.error(msg)
     } finally {
       setLoading(false)
     }

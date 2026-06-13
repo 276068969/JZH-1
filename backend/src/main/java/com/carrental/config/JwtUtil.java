@@ -18,11 +18,24 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private Long expiration;
 
+    private Key getSigningKey() {
+        byte[] keyBytes = secret.getBytes();
+        if (keyBytes.length < 64) {
+            byte[] paddedKey = new byte[64];
+            System.arraycopy(keyBytes, 0, paddedKey, 0, keyBytes.length);
+            for (int i = keyBytes.length; i < 64; i++) {
+                paddedKey[i] = (byte) ('0' + (i % 10));
+            }
+            keyBytes = paddedKey;
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
     public String generateToken(String username) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expiration);
 
-        Key key = Keys.hmacShaKeyFor(secret.getBytes());
+        Key key = getSigningKey();
 
         return Jwts.builder()
                 .setSubject(username)
@@ -33,7 +46,7 @@ public class JwtUtil {
     }
 
     public String getUsernameFromToken(String token) {
-        Key key = Keys.hmacShaKeyFor(secret.getBytes());
+        Key key = getSigningKey();
 
         return Jwts.parserBuilder()
                 .setSigningKey(key)
@@ -45,7 +58,7 @@ public class JwtUtil {
 
     public boolean validateToken(String token) {
         try {
-            Key key = Keys.hmacShaKeyFor(secret.getBytes());
+            Key key = getSigningKey();
             Jwts.parserBuilder()
                     .setSigningKey(key)
                     .build()

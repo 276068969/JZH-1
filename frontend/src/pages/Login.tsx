@@ -16,15 +16,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true)
     try {
       const response = await axios.post('/api/auth/login', values)
+      const code = response.data?.code
       const token = response.data?.token
-      if (token) {
+      const messageText = response.data?.message
+
+      if (code === 200 && token) {
         localStorage.setItem('token', token)
+        message.success('登录成功！')
+        onLogin()
+        navigate('/')
+      } else {
+        throw new Error(messageText || '登录失败，请检查用户名和密码')
       }
-      message.success('登录成功！')
-      onLogin()
-      navigate('/')
     } catch (error: any) {
-      const msg = error.response?.data?.message || '登录失败，请检查用户名和密码'
+      const msg = error.response?.data?.message || error.message || '登录失败，请检查用户名和密码'
       message.error(msg)
     } finally {
       setLoading(false)
