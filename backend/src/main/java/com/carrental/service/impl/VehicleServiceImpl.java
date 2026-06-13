@@ -7,17 +7,22 @@ import com.carrental.entity.Vehicle;
 import com.carrental.mapper.VehicleMapper;
 import com.carrental.service.OrderService;
 import com.carrental.service.VehicleService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> implements VehicleService {
+
+    private static final Logger log = LoggerFactory.getLogger(VehicleServiceImpl.class);
 
     @Autowired
     @Lazy
@@ -163,6 +168,17 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
             allVehicles = getMockVehicles();
         }
 
+        long nullStructured = allVehicles.stream()
+                .filter(v -> v.getSeats() == null
+                        || (v.getFuel() == null || v.getFuel().isEmpty())
+                        || (v.getTransmission() == null || v.getTransmission().isEmpty())
+                        || v.getYear() == null)
+                .count();
+        if (nullStructured > 0) {
+            log.warn("[getFilterOptions] {} vehicles have missing structured columns, backfilling from specs...", nullStructured);
+            allVehicles = backfillStructuredFromSpecs(allVehicles);
+        }
+
         List<Integer> seatsOptions = allVehicles.stream()
                 .map(Vehicle::getSeats)
                 .filter(Objects::nonNull)
@@ -200,6 +216,132 @@ public class VehicleServiceImpl extends ServiceImpl<VehicleMapper, Vehicle> impl
         options.put("transmission", transmissionOptions);
         options.put("types", typeOptions);
         return options;
+    }
+
+    private static final java.util.List<String> COLONS = Arrays.asList(":", "：");
+    private static final java.util.List<String> SEPARATORS = Arrays.asList("|", "｜");
+
+    private static String normalizeSpecs(String specs) {
+        if (specs == null || specs.isEmpty()) return specs;
+        specs = fixDoubleEncoding(specs);
+        specs = specs.replace('：', ':');
+        specs = specs.replace('｜', '|');
+        specs = specs.replace('，', '|');
+        specs = specs.replace('　', ' ');
+        specs = specs.replaceAll("\\s+", "");
+        return specs;
+    }
+
+    private static String fixDoubleEncoding(String s) {
+        if (s == null || s.isEmpty()) return s;
+        try {
+            byte[] raw = s.getBytes(StandardCharsets.ISO_8859_1);
+            String decoded = new String(raw, StandardCharsets.UTF_8);
+            if (containsChinese(decoded) && !containsChinese(s)) {
+                return decoded;
+            }
+            return s;
+        } catch (Exception e) {
+            return s;
+        }
+    }
+
+    private static boolean containsChinese(String s) {
+        for (char c : s.toCharArray()) {
+            if (c >= '\u4e00' && c <= '\u9fa5') return true;
+        }
+        return false;
+    }
+
+    private List<Vehicle> backfillStructuredFromSpecs(List<Vehicle> vehicles) {
+        for (Vehicle v : vehicles) {
+            boolean changed = false;
+            if (v.getSeats() == null) {
+                Integer seats = parseIntFromSpecs(v.getSpecs(), "座位数", "座位", "Seats", "seats");
+                if (seats != null) { v.setSeats(seats); changed = true; }
+            }
+            if (v.getFuel() == null || v.getFuel().isEmpty()) {
+                String fuel = parseStringFromSpecs(v.getSpecs(), "燃料类型", "燃料", "燃油类型", "燃油", "Fuel", "fuel");
+                if (fuel != null) { v.setFuel(fuel); changed = true; }
+            }
+            if (v.getTransmission() == null || v.getTransmission().isEmpty()) {
+                String trans = parseStringFromSpecs(v.getSpecs(), "变速箱", "变速器", "Transmission", "transmission");
+                if (trans != null) { v.setTransmission(trans); changed = true; }
+            }
+            if (v.getYear() == null) {
+                Integer year = parseIntFromSpecs(v.getSpecs(), "年份", "年款", "出厂年份", "生产年份", "Year", "year");
+                if (year != null) { v.setYear(year); changed = true; }
+            }
+            if (changed && v.getId() != null) {
+                try { this.updateById(v); } catch (Exception ignored) { }
+            }
+        }
+        return vehicles;
+    }
+
+    private static Integer parseIntFromSpecs(String specs, String... keys) {
+        specs = normalizeSpecs(specs);
+        if (specs == null || specs.isEmpty()) return null;
+        for (String key : keys) {
+            for (String colon : COLONS) {
+                String open = key + colon;
+                for (String sep : SEPARATORS) {
+                    String raw = substringBetween(specs, open, sep);
+                    if (raw != null && !raw.isEmpty()) {
+                        String num = raw.replaceAll("[^0-9]", "");
+                        if (!num.isEmpty()) {
+                            try { return Integer.parseInt(num); } catch (NumberFormatException ignored) { }
+                        }
+                    }
+                }
+                String raw = substringAfter(specs, open);
+                if (raw != null && !raw.isEmpty()) {
+                    String num = raw.replaceAll("[^0-9]", "");
+                    if (!num.isEmpty()) {
+                        try { return Integer.parseInt(num); } catch (NumberFormatException ignored) { }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String parseStringFromSpecs(String specs, String... keys) {
+        specs = normalizeSpecs(specs);
+        if (specs == null || specs.isEmpty()) return null;
+        for (String key : keys) {
+            for (String colon : COLONS) {
+                String open = key + colon;
+                for (String sep : SEPARATORS) {
+                    String val = substringBetween(specs, open, sep);
+                    if (val != null && !val.trim().isEmpty()) {
+                        return val.trim();
+                    }
+                }
+                String val = substringAfter(specs, open);
+                if (val != null && !val.trim().isEmpty()) {
+                    return val.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String substringBetween(String str, String open, String close) {
+        if (str == null || open == null || close == null) return null;
+        int start = str.indexOf(open);
+        if (start < 0) return null;
+        start += open.length();
+        int end = str.indexOf(close, start);
+        if (end < 0) return null;
+        return str.substring(start, end);
+    }
+
+    private static String substringAfter(String str, String open) {
+        if (str == null || open == null) return null;
+        int start = str.indexOf(open);
+        if (start < 0) return null;
+        return str.substring(start + open.length());
     }
 
     private List<Vehicle> filterMockVehicles(VehicleSearchRequest request) {

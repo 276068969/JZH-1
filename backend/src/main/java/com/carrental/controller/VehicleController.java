@@ -132,6 +132,14 @@ public class VehicleController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/health")
+    public ResponseEntity<?> health() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "UP");
+        response.put("service", "vehicle-service");
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/compare")
     public ResponseEntity<?> compareVehicles(@RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");

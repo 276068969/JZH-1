@@ -4,6 +4,7 @@
 -- 适用: 已有旧库升级（含 mysql_data 历史数据）
 -- 功能: 新增 seats / fuel / transmission / year 四列，从 specs 文本解析回填，建索引
 -- 幂等: 可重复执行，已存在的列不会重复添加
+-- 兼容: 同时支持半角冒号（座位数:5）与全角冒号（座位数：5）
 -- =================================================================
 
 USE car_rental;
@@ -18,117 +19,150 @@ CREATE TABLE IF NOT EXISTS `schema_migrations` (
   PRIMARY KEY (`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 如果此版本已执行过则直接退出（通过存储过程实现，避免跨版本重复报错）
-DELIMITER $$
-DROP PROCEDURE IF EXISTS `run_migration_if_needed` $$
-CREATE PROCEDURE `run_migration_if_needed`(
-  IN  p_version  VARCHAR(50),
-  IN  p_name     VARCHAR(200),
-  OUT p_should_run TINYINT
-)
-BEGIN
-  DECLARE v_count INT DEFAULT 0;
-  SELECT COUNT(*) INTO v_count FROM `schema_migrations` WHERE `version` = p_version;
-  IF v_count = 0 THEN
-    SET p_should_run = 1;
-    INSERT INTO `schema_migrations`(`version`, `name`) VALUES (p_version, p_name);
-  ELSE
-    SET p_should_run = 0;
-  END IF;
-END $$
-DELIMITER ;
-
-SET @should_run = 0;
-CALL `run_migration_if_needed`('V20240612_01', 'vehicle_structured_specs', @should_run);
-
--- 必须在一个 CALL 之后才能使用用户变量做 IF 判断，这里改用存储过程包裹整个迁移
 DELIMITER $$
 DROP PROCEDURE IF EXISTS `migrate_vehicle_spec_columns` $$
 CREATE PROCEDURE `migrate_vehicle_spec_columns`()
 BEGIN
   DECLARE v_count INT DEFAULT 0;
-  SELECT COUNT(*) INTO v_count FROM `schema_migrations` WHERE `version` = 'V20240612_01_LOCK';
-  IF v_count > 0 THEN
-    SIGNAL SQLSTATE '01000' SET MESSAGE_TEXT = 'Migration V20240612_01 already applied, skipping.';
-  END IF;
-
-  -- 加执行锁（防止并发）
-  INSERT IGNORE INTO `schema_migrations`(`version`, `name`) VALUES ('V20240612_01_LOCK', 'lock_during_apply');
 
   -- -------------------------------------------------------------
-  -- 2) 为旧库 ALTER TABLE：逐列检查并添加（兼容 MySQL 无原生 IF NOT EXISTS）
+  -- 2) 为旧库 ALTER TABLE：逐列检查并添加
   -- -------------------------------------------------------------
-
-  -- seats 列
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'seats'
   ) THEN
-    ALTER TABLE `vehicles` ADD COLUMN `seats` INT DEFAULT NULL AFTER `features`;
+    ALTER TABLE `vehicles` ADD COLUMN `seats` INT DEFAULT NULL;
   END IF;
 
-  -- fuel 列
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'fuel'
   ) THEN
-    ALTER TABLE `vehicles` ADD COLUMN `fuel` VARCHAR(30) DEFAULT NULL AFTER `seats`;
+    ALTER TABLE `vehicles` ADD COLUMN `fuel` VARCHAR(30) DEFAULT NULL;
   END IF;
 
-  -- transmission 列
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'transmission'
   ) THEN
-    ALTER TABLE `vehicles` ADD COLUMN `transmission` VARCHAR(30) DEFAULT NULL AFTER `fuel`;
+    ALTER TABLE `vehicles` ADD COLUMN `transmission` VARCHAR(30) DEFAULT NULL;
   END IF;
 
-  -- year 列
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'year'
   ) THEN
-    ALTER TABLE `vehicles` ADD COLUMN `year` INT DEFAULT NULL AFTER `transmission`;
+    ALTER TABLE `vehicles` ADD COLUMN `year` INT DEFAULT NULL;
   END IF;
 
   -- -------------------------------------------------------------
   -- 3) 从 specs 文本回填结构化字段（只回填当前为 NULL 的列）
   --    specs 格式: "座位数:5|变速箱:自动|燃料:纯电动|年份:2024"
+  --             or "座位数：5｜变速箱：自动｜燃料：纯电动｜年份：2024"（全角冒号/分隔符）
+  --    兼容 key 变体: "座位"/"燃料类型"/"变速器"/"年款" 等
+  --    兼容冒号: 半角「:」、全角「：」
+  --    兼容分隔符: 半角「|」、全角「｜」
+  --    安全策略: 先用 LOCATE 判断 key 确实存在, 再用 SUBSTRING_INDEX 提取
   -- -------------------------------------------------------------
 
-  -- 回填 seats: 提取 "座位数:N"
+  -- 先归一化 specs: 全角冒号「：」→ 半角「:」, 全角分隔符「｜」→ 半角「|」
+  -- 兼容: 全角空格「　」、连续空格、中文逗号「，」等各种不标准分隔符
   UPDATE `vehicles`
-    SET `seats` = CAST(
-      REGEXP_REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '座位数:', -1), '|', 1), '[^0-9]', '') AS UNSIGNED
+    SET `specs` = TRIM(
+      REGEXP_REPLACE(
+        REPLACE(REPLACE(REPLACE(REPLACE(`specs`,
+          '：', ':'),
+          '｜', '|'),
+          '　', ' '),
+          '，', '|'),
+        '[[:space:]]+', '')
     )
+    WHERE `specs` IS NOT NULL AND `specs` <> '';
+
+  -- 回填 seats: 半角冒号 + 变体 key + 归一化后的分隔符
+  UPDATE `vehicles`
+    SET `seats` = CAST(REGEXP_REPLACE(CASE
+      WHEN LOCATE('座位数:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '座位数:', -1), '|', 1)
+      WHEN LOCATE('座位:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '座位:', -1), '|', 1)
+      WHEN LOCATE('Seats:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Seats:', -1), '|', 1)
+      WHEN LOCATE('seats:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'seats:', -1), '|', 1)
+      ELSE NULL
+    END, '[^0-9]', '') AS UNSIGNED)
   WHERE `seats` IS NULL
-    AND `specs` IS NOT NULL
-    AND `specs` LIKE '%座位数:%'
-    AND REGEXP_REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '座位数:', -1), '|', 1), '[^0-9]', '') <> '';
+    AND `specs` IS NOT NULL AND `specs` <> ''
+    AND REGEXP_REPLACE(CASE
+      WHEN LOCATE('座位数:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '座位数:', -1), '|', 1)
+      WHEN LOCATE('座位:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '座位:', -1), '|', 1)
+      WHEN LOCATE('Seats:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Seats:', -1), '|', 1)
+      WHEN LOCATE('seats:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'seats:', -1), '|', 1)
+      ELSE NULL
+    END, '[^0-9]', '') <> '';
 
-  -- 回填 fuel: 提取 "燃料:XXX"
+  -- 回填 fuel: 半角冒号 + 变体 key + 归一化后的分隔符
   UPDATE `vehicles`
-    SET `fuel` = TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃料:', -1), '|', 1))
-  WHERE `fuel` IS NULL
-    AND `specs` IS NOT NULL
-    AND `specs` LIKE '%燃料:%';
+    SET `fuel` = TRIM(CASE
+      WHEN LOCATE('燃料类型:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃料类型:', -1), '|', 1)
+      WHEN LOCATE('燃料:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃料:', -1), '|', 1)
+      WHEN LOCATE('燃油类型:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃油类型:', -1), '|', 1)
+      WHEN LOCATE('燃油:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃油:', -1), '|', 1)
+      WHEN LOCATE('Fuel:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Fuel:', -1), '|', 1)
+      WHEN LOCATE('fuel:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'fuel:', -1), '|', 1)
+      ELSE NULL
+    END)
+  WHERE (`fuel` IS NULL OR `fuel` = '')
+    AND `specs` IS NOT NULL AND `specs` <> ''
+    AND CASE
+      WHEN LOCATE('燃料类型:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃料类型:', -1), '|', 1)
+      WHEN LOCATE('燃料:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃料:', -1), '|', 1)
+      WHEN LOCATE('燃油类型:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃油类型:', -1), '|', 1)
+      WHEN LOCATE('燃油:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '燃油:', -1), '|', 1)
+      WHEN LOCATE('Fuel:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Fuel:', -1), '|', 1)
+      WHEN LOCATE('fuel:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'fuel:', -1), '|', 1)
+      ELSE NULL
+    END IS NOT NULL;
 
-  -- 回填 transmission: 提取 "变速箱:XXX"
+  -- 回填 transmission: 半角冒号 + 变体 key + 归一化后的分隔符
   UPDATE `vehicles`
-    SET `transmission` = TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '变速箱:', -1), '|', 1))
-  WHERE `transmission` IS NULL
-    AND `specs` IS NOT NULL
-    AND `specs` LIKE '%变速箱:%';
+    SET `transmission` = TRIM(CASE
+      WHEN LOCATE('变速箱:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '变速箱:', -1), '|', 1)
+      WHEN LOCATE('变速器:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '变速器:', -1), '|', 1)
+      WHEN LOCATE('Transmission:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Transmission:', -1), '|', 1)
+      WHEN LOCATE('transmission:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'transmission:', -1), '|', 1)
+      ELSE NULL
+    END)
+  WHERE (`transmission` IS NULL OR `transmission` = '')
+    AND `specs` IS NOT NULL AND `specs` <> ''
+    AND CASE
+      WHEN LOCATE('变速箱:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '变速箱:', -1), '|', 1)
+      WHEN LOCATE('变速器:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '变速器:', -1), '|', 1)
+      WHEN LOCATE('Transmission:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Transmission:', -1), '|', 1)
+      WHEN LOCATE('transmission:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'transmission:', -1), '|', 1)
+      ELSE NULL
+    END IS NOT NULL;
 
-  -- 回填 year: 提取 "年份:YYYY"
+  -- 回填 year: 半角冒号 + 变体 key + 归一化后的分隔符
   UPDATE `vehicles`
-    SET `year` = CAST(
-      REGEXP_REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '年份:', -1), '|', 1), '[^0-9]', '') AS UNSIGNED
-    )
+    SET `year` = CAST(REGEXP_REPLACE(CASE
+      WHEN LOCATE('年份:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '年份:', -1), '|', 1)
+      WHEN LOCATE('年款:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '年款:', -1), '|', 1)
+      WHEN LOCATE('出厂年份:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '出厂年份:', -1), '|', 1)
+      WHEN LOCATE('生产年份:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '生产年份:', -1), '|', 1)
+      WHEN LOCATE('Year:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Year:', -1), '|', 1)
+      WHEN LOCATE('year:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'year:', -1), '|', 1)
+      ELSE NULL
+    END, '[^0-9]', '') AS UNSIGNED)
   WHERE `year` IS NULL
-    AND `specs` IS NOT NULL
-    AND `specs` LIKE '%年份:%'
-    AND REGEXP_REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '年份:', -1), '|', 1), '[^0-9]', '') <> '';
+    AND `specs` IS NOT NULL AND `specs` <> ''
+    AND REGEXP_REPLACE(CASE
+      WHEN LOCATE('年份:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '年份:', -1), '|', 1)
+      WHEN LOCATE('年款:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '年款:', -1), '|', 1)
+      WHEN LOCATE('出厂年份:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '出厂年份:', -1), '|', 1)
+      WHEN LOCATE('生产年份:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, '生产年份:', -1), '|', 1)
+      WHEN LOCATE('Year:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'Year:', -1), '|', 1)
+      WHEN LOCATE('year:', `specs`) > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(`specs`, 'year:', -1), '|', 1)
+      ELSE NULL
+    END, '[^0-9]', '') <> '';
 
   -- -------------------------------------------------------------
   -- 4) 补索引（IF NOT EXISTS 形式）
@@ -154,32 +188,12 @@ BEGIN
     CREATE INDEX `idx_transmission` ON `vehicles`(`transmission`);
   END IF;
 
-  -- 标记主迁移版本已完成
+  -- 标记迁移版本已完成（使用 INSERT IGNORE 保证幂等）
   INSERT IGNORE INTO `schema_migrations`(`version`, `name`)
   VALUES ('V20240612_01', 'vehicle_structured_specs');
-
-  -- 清理临时锁记录
-  DELETE FROM `schema_migrations` WHERE `version` = 'V20240612_01_LOCK';
 END $$
 DELIMITER ;
 
 CALL `migrate_vehicle_spec_columns`();
 
--- 清理临时存储过程
 DROP PROCEDURE IF EXISTS `migrate_vehicle_spec_columns`;
-DROP PROCEDURE IF EXISTS `run_migration_if_needed`;
-
--- =================================================================
--- 验证输出（可选，查看回填结果）
--- =================================================================
-SELECT
-  COUNT(*)                          AS total_count,
-  SUM(CASE WHEN seats IS NOT NULL THEN 1 ELSE 0 END)        AS seats_filled,
-  SUM(CASE WHEN fuel IS NOT NULL THEN 1 ELSE 0 END)         AS fuel_filled,
-  SUM(CASE WHEN transmission IS NOT NULL THEN 1 ELSE 0 END) AS transmission_filled,
-  SUM(CASE WHEN year IS NOT NULL THEN 1 ELSE 0 END)         AS year_filled
-FROM `vehicles`;
-
-SELECT id, name, seats, fuel, transmission, year, specs
-FROM `vehicles`
-ORDER BY id;

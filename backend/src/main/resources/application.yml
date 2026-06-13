@@ -41,3 +41,12 @@ jwt:
 logging:
   level:
     com.carrental: debug
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

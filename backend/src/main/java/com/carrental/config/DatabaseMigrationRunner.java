@@ -7,8 +7,12 @@ import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @Order(1)
@@ -18,6 +22,15 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
     private static final String MIGRATION_VERSION = "V20240612_01";
     private static final String MIGRATION_NAME = "vehicle_structured_specs";
+
+    private static final List<String> SEATS_KEYS = Arrays.asList("座位数", "座位", "Seats", "seats");
+    private static final List<String> FUEL_KEYS = Arrays.asList("燃料类型", "燃料", "燃油类型", "燃油", "Fuel", "fuel");
+    private static final List<String> TRANSMISSION_KEYS = Arrays.asList("变速箱", "变速器", "Transmission", "transmission");
+    private static final List<String> YEAR_KEYS = Arrays.asList("年份", "年款", "出厂年份", "生产年份", "Year", "year");
+    private static final List<String> COLONS = Arrays.asList(":", "：");
+    private static final List<String> SEPARATORS = Arrays.asList("|", "｜");
+
+    private static final Pattern INT_PATTERN = Pattern.compile("(\\d+)");
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -32,6 +45,8 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
             if (isMigrationApplied()) {
                 log.info("[DB-Migration] {} already applied, skipping.", MIGRATION_VERSION);
+                log.info("[DB-Migration] Checking for NULL structured columns anyway (safety re-backfill)...");
+                rebackfillIfAnyNull();
                 return;
             }
 
@@ -42,10 +57,11 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             addColumnIfMissing("vehicles", "transmission", "VARCHAR(30) DEFAULT NULL");
             addColumnIfMissing("vehicles", "year", "INT DEFAULT NULL");
 
-            backfillSeatsFromSpecs();
-            backfillFuelFromSpecs();
-            backfillTransmissionFromSpecs();
-            backfillYearFromSpecs();
+            int seats = backfillSeatsFromSpecs();
+            int fuel = backfillFuelFromSpecs();
+            int trans = backfillTransmissionFromSpecs();
+            int year = backfillYearFromSpecs();
+            log.info("[DB-Migration] Backfill summary: seats={}, fuel={}, transmission={}, year={}", seats, fuel, trans, year);
 
             addIndexIfMissing("vehicles", "idx_seats", "seats");
             addIndexIfMissing("vehicles", "idx_fuel", "fuel");
@@ -56,6 +72,42 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             log.info("[DB-Migration] {} completed successfully.", MIGRATION_VERSION);
         } catch (Exception e) {
             log.warn("[DB-Migration] skipped due to error: {}", e.getMessage());
+        }
+    }
+
+    private void rebackfillIfAnyNull() {
+        try {
+            Map<String, Object> row = jdbcTemplate.queryForMap(
+                "SELECT " +
+                "  SUM(CASE WHEN seats IS NULL THEN 1 ELSE 0 END) AS seats_null, " +
+                "  SUM(CASE WHEN fuel IS NULL OR fuel = '' THEN 1 ELSE 0 END) AS fuel_null, " +
+                "  SUM(CASE WHEN transmission IS NULL OR transmission = '' THEN 1 ELSE 0 END) AS trans_null, " +
+                "  SUM(CASE WHEN year IS NULL THEN 1 ELSE 0 END) AS year_null, " +
+                "  COUNT(*) AS total " +
+                "FROM vehicles"
+            );
+            Number totalN = (Number) row.get("total");
+            if (totalN == null || totalN.longValue() == 0) return;
+
+            long seatsNull = ((Number) row.get("seats_null")).longValue();
+            long fuelNull = ((Number) row.get("fuel_null")).longValue();
+            long transNull = ((Number) row.get("trans_null")).longValue();
+            long yearNull = ((Number) row.get("year_null")).longValue();
+
+            if (seatsNull == 0 && fuelNull == 0 && transNull == 0 && yearNull == 0) {
+                log.info("[DB-Migration] All {} rows have structured columns filled, no re-backfill needed.", totalN);
+                return;
+            }
+
+            log.info("[DB-Migration] Re-backfilling: seats({}), fuel({}), transmission({}), year({}) / total {}",
+                seatsNull, fuelNull, transNull, yearNull, totalN);
+
+            if (seatsNull > 0) backfillSeatsFromSpecs();
+            if (fuelNull > 0) backfillFuelFromSpecs();
+            if (transNull > 0) backfillTransmissionFromSpecs();
+            if (yearNull > 0) backfillYearFromSpecs();
+        } catch (Exception e) {
+            log.warn("[DB-Migration] re-backfill check skipped: {}", e.getMessage());
         }
     }
 
@@ -142,135 +194,202 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         }
     }
 
-    private void backfillSeatsFromSpecs() {
-        int updated;
-        try {
-            updated = jdbcTemplate.update(
-                "UPDATE vehicles SET seats = CAST(REGEXP_REPLACE(" +
-                "  SUBSTRING_INDEX(SUBSTRING_INDEX(specs, '座位数:', -1), '|', 1), '[^0-9]', '') AS UNSIGNED) " +
-                "WHERE seats IS NULL AND specs IS NOT NULL AND specs LIKE '%座位数:%' " +
-                "AND REGEXP_REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(specs, '座位数:', -1), '|', 1), '[^0-9]', '') <> ''"
-            );
-        } catch (Exception e) {
-            updated = backfillSeatsFromSpecsFallback();
-        }
-        log.info("[DB-Migration] Backfilled seats for {} rows.", updated);
+    private int backfillSeatsFromSpecs() {
+        return backfillIntFieldFromSpecsWithFallback("seats", SEATS_KEYS);
     }
 
-    private int backfillSeatsFromSpecsFallback() {
+    private int backfillFuelFromSpecs() {
+        return backfillStringFieldFromSpecsWithFallback("fuel", FUEL_KEYS);
+    }
+
+    private int backfillTransmissionFromSpecs() {
+        return backfillStringFieldFromSpecsWithFallback("transmission", TRANSMISSION_KEYS);
+    }
+
+    private int backfillYearFromSpecs() {
+        return backfillIntFieldFromSpecsWithFallback("year", YEAR_KEYS);
+    }
+
+    private int backfillStringFieldFromSpecsWithFallback(String column, List<String> keys) {
         try {
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, specs FROM vehicles WHERE seats IS NULL AND specs IS NOT NULL AND specs LIKE '%座位数:%'"
+                "SELECT id, specs FROM vehicles " +
+                "WHERE (" + column + " IS NULL OR " + column + " = '') " +
+                "AND specs IS NOT NULL"
             );
+            log.info("[DB-Migration] Backfill {} query found {} rows.", column, rows.size());
             int count = 0;
             for (Map<String, Object> row : rows) {
                 Long id = ((Number) row.get("id")).longValue();
-                String specs = (String) row.get("specs");
-                String val = substringBetween(specs, "座位数:", "|");
-                if (val == null) val = substringAfter(specs, "座位数:");
-                if (val != null) {
-                    String num = val.replaceAll("[^0-9]", "");
-                    if (!num.isEmpty()) {
-                        jdbcTemplate.update("UPDATE vehicles SET seats = ? WHERE id = ?", Integer.parseInt(num), id);
-                        count++;
-                    }
-                }
-            }
-            return count;
-        } catch (Exception ex) {
-            log.warn("[DB-Migration] seats fallback backfill failed: {}", ex.getMessage());
-            return 0;
-        }
-    }
-
-    private void backfillFuelFromSpecs() {
-        int updated;
-        try {
-            updated = jdbcTemplate.update(
-                "UPDATE vehicles SET fuel = TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(specs, '燃料:', -1), '|', 1)) " +
-                "WHERE fuel IS NULL AND specs IS NOT NULL AND specs LIKE '%燃料:%'"
-            );
-        } catch (Exception e) {
-            updated = backfillStringFieldFromSpecs("fuel", "燃料:");
-        }
-        log.info("[DB-Migration] Backfilled fuel for {} rows.", updated);
-    }
-
-    private void backfillTransmissionFromSpecs() {
-        int updated;
-        try {
-            updated = jdbcTemplate.update(
-                "UPDATE vehicles SET transmission = TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(specs, '变速箱:', -1), '|', 1)) " +
-                "WHERE transmission IS NULL AND specs IS NOT NULL AND specs LIKE '%变速箱:%'"
-            );
-        } catch (Exception e) {
-            updated = backfillStringFieldFromSpecs("transmission", "变速箱:");
-        }
-        log.info("[DB-Migration] Backfilled transmission for {} rows.", updated);
-    }
-
-    private void backfillYearFromSpecs() {
-        int updated;
-        try {
-            updated = jdbcTemplate.update(
-                "UPDATE vehicles SET year = CAST(REGEXP_REPLACE(" +
-                "  SUBSTRING_INDEX(SUBSTRING_INDEX(specs, '年份:', -1), '|', 1), '[^0-9]', '') AS UNSIGNED) " +
-                "WHERE year IS NULL AND specs IS NOT NULL AND specs LIKE '%年份:%' " +
-                "AND REGEXP_REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(specs, '年份:', -1), '|', 1), '[^0-9]', '') <> ''"
-            );
-        } catch (Exception e) {
-            updated = backfillYearFromSpecsFallback();
-        }
-        log.info("[DB-Migration] Backfilled year for {} rows.", updated);
-    }
-
-    private int backfillStringFieldFromSpecs(String column, String key) {
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, specs FROM vehicles WHERE " + column + " IS NULL AND specs IS NOT NULL AND specs LIKE '%" + key + "%'"
-            );
-            int count = 0;
-            for (Map<String, Object> row : rows) {
-                Long id = ((Number) row.get("id")).longValue();
-                String specs = (String) row.get("specs");
-                String val = substringBetween(specs, key, "|");
-                if (val == null) val = substringAfter(specs, key);
+                Object specsObj = row.get("specs");
+                String specs = asString(specsObj);
+                log.debug("[DB-Migration] id={}, specs type={}, specs={}", id, specsObj != null ? specsObj.getClass().getSimpleName() : "null", specs);
+                String val = extractStringByKeys(specs, keys);
                 if (val != null && !val.trim().isEmpty()) {
                     jdbcTemplate.update("UPDATE vehicles SET " + column + " = ? WHERE id = ?", val.trim(), id);
                     count++;
                 }
             }
+            log.info("[DB-Migration] Backfilled {} (string) for {} rows.", column, count);
             return count;
         } catch (Exception ex) {
-            log.warn("[DB-Migration] {} fallback backfill failed: {}", column, ex.getMessage());
+            log.warn("[DB-Migration] {} backfill failed: {}", column, ex.getMessage(), ex);
             return 0;
         }
     }
 
-    private int backfillYearFromSpecsFallback() {
+    private int backfillIntFieldFromSpecsWithFallback(String column, List<String> keys) {
         try {
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, specs FROM vehicles WHERE year IS NULL AND specs IS NOT NULL AND specs LIKE '%年份:%'"
+                "SELECT id, specs FROM vehicles " +
+                "WHERE " + column + " IS NULL " +
+                "AND specs IS NOT NULL"
             );
+            log.info("[DB-Migration] Backfill {} query found {} rows.", column, rows.size());
             int count = 0;
             for (Map<String, Object> row : rows) {
                 Long id = ((Number) row.get("id")).longValue();
-                String specs = (String) row.get("specs");
-                String val = substringBetween(specs, "年份:", "|");
-                if (val == null) val = substringAfter(specs, "年份:");
+                Object specsObj = row.get("specs");
+                String specs = asString(specsObj);
+                log.debug("[DB-Migration] id={}, specs type={}, specs={}", id, specsObj != null ? specsObj.getClass().getSimpleName() : "null", specs);
+                Integer val = extractIntByKeys(specs, keys);
                 if (val != null) {
-                    String num = val.replaceAll("[^0-9]", "");
-                    if (!num.isEmpty()) {
-                        jdbcTemplate.update("UPDATE vehicles SET year = ? WHERE id = ?", Integer.parseInt(num), id);
-                        count++;
-                    }
+                    jdbcTemplate.update("UPDATE vehicles SET " + column + " = ? WHERE id = ?", val, id);
+                    count++;
                 }
             }
+            log.info("[DB-Migration] Backfilled {} (int) for {} rows.", column, count);
             return count;
         } catch (Exception ex) {
-            log.warn("[DB-Migration] year fallback backfill failed: {}", ex.getMessage());
+            log.warn("[DB-Migration] {} backfill failed: {}", column, ex.getMessage(), ex);
             return 0;
         }
+    }
+
+    private static String normalizeSpecs(String specs) {
+        if (specs == null || specs.isEmpty()) return specs;
+        String s = specs;
+        s = s.replace('：', ':');
+        s = s.replace('｜', '|');
+        s = s.replace('，', '|');
+        s = s.replace('　', ' ');
+        s = s.replaceAll("\\s+", "");
+        return s;
+    }
+
+    private static String asString(Object val) {
+        if (val == null) return null;
+        String s;
+        if (val instanceof String) {
+            s = (String) val;
+        } else if (val instanceof byte[]) {
+            s = new String((byte[]) val, StandardCharsets.UTF_8);
+        } else {
+            s = val.toString();
+        }
+        return fixDoubleEncoding(s);
+    }
+
+    private static String fixDoubleEncoding(String s) {
+        if (s == null || s.isEmpty()) return s;
+        if (containsChinese(s)) {
+            return s;
+        }
+        if (!looksLikeDoubleEncoded(s)) {
+            return s;
+        }
+        try {
+            byte[] raw = s.getBytes(StandardCharsets.ISO_8859_1);
+            String decoded = new String(raw, StandardCharsets.UTF_8);
+            if (containsChinese(decoded)) {
+                return decoded;
+            }
+            return s;
+        } catch (Exception e) {
+            return s;
+        }
+    }
+
+    private static boolean looksLikeDoubleEncoded(String s) {
+        if (s == null || s.isEmpty()) return false;
+        int weirdCount = 0;
+        for (char c : s.toCharArray()) {
+            if (c >= '\u00c0' && c <= '\u00ff') {
+                weirdCount++;
+            }
+        }
+        return weirdCount >= 3;
+    }
+
+    private static boolean containsChinese(String s) {
+        for (char c : s.toCharArray()) {
+            if (c >= '\u4e00' && c <= '\u9fa5') return true;
+        }
+        return false;
+    }
+
+    private static String extractStringByKeys(String specs, List<String> keys) {
+        specs = normalizeSpecs(specs);
+        if (specs == null || specs.isEmpty()) return null;
+        for (String key : keys) {
+            for (String colon : COLONS) {
+                String open = key + colon;
+                for (String sep : SEPARATORS) {
+                    String val = substringBetween(specs, open, sep);
+                    if (val != null && !val.trim().isEmpty()) {
+                        return val.trim();
+                    }
+                }
+                String val = substringAfter(specs, open);
+                if (val != null && !val.trim().isEmpty()) {
+                    return val.trim();
+                }
+            }
+        }
+        for (String key : keys) {
+            for (String sep : SEPARATORS) {
+                String val = substringBetweenIgnoreCase(specs, key, sep);
+                if (val != null) {
+                    val = val.trim();
+                    while (val.startsWith(":") || val.startsWith("：")) {
+                        val = val.substring(1).trim();
+                    }
+                    if (!val.isEmpty()) return val;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Integer extractIntByKeys(String specs, List<String> keys) {
+        specs = normalizeSpecs(specs);
+        if (specs == null || specs.isEmpty()) return null;
+        for (String key : keys) {
+            for (String colon : COLONS) {
+                String open = key + colon;
+                for (String sep : SEPARATORS) {
+                    String raw = substringBetween(specs, open, sep);
+                    Integer v = parseIntRaw(raw);
+                    if (v != null) return v;
+                }
+                String raw = substringAfter(specs, open);
+                Integer v = parseIntRaw(raw);
+                if (v != null) return v;
+            }
+        }
+        return null;
+    }
+
+    private static Integer parseIntRaw(String raw) {
+        if (raw == null || raw.isEmpty()) return null;
+        Matcher m = INT_PATTERN.matcher(raw);
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
     }
 
     private static String substringBetween(String str, String open, String close) {
@@ -279,6 +398,17 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         if (start < 0) return null;
         start += open.length();
         int end = str.indexOf(close, start);
+        if (end < 0) return null;
+        return str.substring(start, end);
+    }
+
+    private static String substringBetweenIgnoreCase(String str, String open, String close) {
+        if (str == null || open == null || close == null) return null;
+        String lower = str.toLowerCase();
+        int start = lower.indexOf(open.toLowerCase());
+        if (start < 0) return null;
+        start += open.length();
+        int end = lower.indexOf(close.toLowerCase(), start);
         if (end < 0) return null;
         return str.substring(start, end);
     }
