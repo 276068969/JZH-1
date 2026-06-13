@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Card, Button, Row, Col, DatePicker, message, Rate, Tabs, Tag, Alert, Spin } from 'antd'
-import { EnvironmentOutlined, UserOutlined, CarOutlined, SwapOutlined, LoginOutlined, ReloadOutlined, ThunderboltOutlined, CalendarOutlined, SafetyCertificateOutlined, RepeatOutlined } from '@ant-design/icons'
+import { EnvironmentOutlined, UserOutlined, CarOutlined, SwapOutlined, LoginOutlined, ReloadOutlined, ThunderboltOutlined, CalendarOutlined, SafetyCertificateOutlined, RetweetOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import dayjs, { Dayjs } from 'dayjs'
 
@@ -430,7 +430,7 @@ const VehicleDetail: React.FC = () => {
               <Alert
                 message={
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <RepeatOutlined style={{ color: '#52c41a' }} />
+                    <RetweetOutlined style={{ color: '#52c41a' }} />
                     <span>复租订单确认</span>
                   </div>
                 }

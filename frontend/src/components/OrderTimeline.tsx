@@ -9,7 +9,7 @@ import {
   DeleteOutlined,
   InfoCircleOutlined,
   ReloadOutlined,
-  RepeatOutlined
+  RetweetOutlined
 } from '@ant-design/icons'
 
 export interface OrderItem {
@@ -299,7 +299,7 @@ const OrderCard: React.FC<{
             <Button
               type="text"
               size="small"
-              icon={<RepeatOutlined />}
+              icon={<RetweetOutlined />}
               style={{ color: '#52c41a' }}
               onClick={(e) => {
                 e.stopPropagation()

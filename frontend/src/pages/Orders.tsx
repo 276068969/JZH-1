@@ -20,8 +20,7 @@ import {
   MailOutlined,
   SafetyCertificateOutlined,
   ClockCircleOutlined,
-  RepeatOutlined,
-  RightOutlined,
+  RetweetOutlined,
   ArrowRightOutlined,
   InfoCircleOutlined
 } from '@ant-design/icons'
@@ -289,10 +288,10 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
     setReRentAvailable(null)
     setReRentModalVisible(true)
 
-    checkReRentAvailability(order.vehicleId, defaultStart, defaultEnd)
+    checkReRentAvailability(order.vehicleId)
   }
 
-  const checkReRentAvailability = async (vehicleId: number, start: Dayjs, end: Dayjs) => {
+  const checkReRentAvailability = async (vehicleId: number) => {
     setCheckingReRentAvailability(true)
     setReRentAvailable(null)
     try {
@@ -318,7 +317,7 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
       const newEnd = date.add(reRentDays - 1, 'day')
       setReRentEndDate(newEnd)
       if (reRentOrder) {
-        checkReRentAvailability(reRentOrder.vehicleId, date, newEnd)
+        checkReRentAvailability(reRentOrder.vehicleId)
       }
     }
   }
@@ -329,7 +328,7 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
       const newEnd = reRentStartDate.add(days - 1, 'day')
       setReRentEndDate(newEnd)
       if (reRentOrder) {
-        checkReRentAvailability(reRentOrder.vehicleId, reRentStartDate, newEnd)
+        checkReRentAvailability(reRentOrder.vehicleId)
       }
     }
   }
@@ -484,7 +483,7 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
           {record.status === 'completed' && (
             <Button
               type="link"
-              icon={<RepeatOutlined />}
+              icon={<RetweetOutlined />}
               style={{ color: '#52c41a' }}
               onClick={() => handleReRent(record)}
             >
@@ -1220,7 +1219,7 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <RepeatOutlined style={{ color: '#52c41a' }} />
+            <RetweetOutlined style={{ color: '#52c41a' }} />
             <span>历史订单复租向导</span>
           </div>
         }
