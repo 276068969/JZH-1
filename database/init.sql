@@ -9,11 +9,21 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` VARCHAR(100),
   `phone` VARCHAR(20),
   `user_type` VARCHAR(20) DEFAULT 'personal',
+  `id_card` VARCHAR(18) DEFAULT NULL COMMENT '身份证号（个人用户）',
+  `license_number` VARCHAR(20) DEFAULT NULL COMMENT '驾照号（个人用户）',
+  `company_name` VARCHAR(100) DEFAULT NULL COMMENT '公司名称（企业用户）',
+  `credit_code` VARCHAR(18) DEFAULT NULL COMMENT '统一社会信用代码（企业用户）',
+  `legal_person_name` VARCHAR(50) DEFAULT NULL COMMENT '法人代表姓名（企业用户）',
+  `legal_person_id_card` VARCHAR(18) DEFAULT NULL COMMENT '法人代表身份证号（企业用户）',
+  `profile_complete` TINYINT DEFAULT 0 COMMENT '资料完整度标记 0-未完成 1-已完成',
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` TINYINT DEFAULT 0,
   PRIMARY KEY (`id`),
-  INDEX `idx_username` (`username`)
+  UNIQUE INDEX `idx_username` (`username`),
+  UNIQUE INDEX `idx_id_card` (`id_card`),
+  UNIQUE INDEX `idx_license_number` (`license_number`),
+  UNIQUE INDEX `idx_credit_code` (`credit_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `vehicles` (

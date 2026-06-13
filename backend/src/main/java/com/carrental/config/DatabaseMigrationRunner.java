@@ -20,9 +20,6 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DatabaseMigrationRunner.class);
 
-    private static final String MIGRATION_VERSION = "V20240612_01";
-    private static final String MIGRATION_NAME = "vehicle_structured_specs";
-
     private static final List<String> SEATS_KEYS = Arrays.asList("座位数", "座位", "Seats", "seats");
     private static final List<String> FUEL_KEYS = Arrays.asList("燃料类型", "燃料", "燃油类型", "燃油", "Fuel", "fuel");
     private static final List<String> TRANSMISSION_KEYS = Arrays.asList("变速箱", "变速器", "Transmission", "transmission");
@@ -42,15 +39,25 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
     public void run(String... args) {
         try {
             ensureSchemaMigrationsTable();
+            runVehicleStructuredSpecsMigration();
+            runUserProfileExtensionMigration();
+        } catch (Exception e) {
+            log.warn("[DB-Migration] skipped due to error: {}", e.getMessage());
+        }
+    }
 
-            if (isMigrationApplied()) {
-                log.info("[DB-Migration] {} already applied, skipping.", MIGRATION_VERSION);
+    private void runVehicleStructuredSpecsMigration() {
+        final String version = "V20240612_01";
+        final String name = "vehicle_structured_specs";
+        try {
+            if (isMigrationApplied(version)) {
+                log.info("[DB-Migration] {} already applied, skipping.", version);
                 log.info("[DB-Migration] Checking for NULL structured columns anyway (safety re-backfill)...");
                 rebackfillIfAnyNull();
                 return;
             }
 
-            log.info("[DB-Migration] Running {}: {}", MIGRATION_VERSION, MIGRATION_NAME);
+            log.info("[DB-Migration] Running {}: {}", version, name);
 
             addColumnIfMissing("vehicles", "seats", "INT DEFAULT NULL");
             addColumnIfMissing("vehicles", "fuel", "VARCHAR(30) DEFAULT NULL");
@@ -67,11 +74,42 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             addIndexIfMissing("vehicles", "idx_fuel", "fuel");
             addIndexIfMissing("vehicles", "idx_transmission", "transmission");
 
-            markMigrationApplied();
+            markMigrationApplied(version, name);
 
-            log.info("[DB-Migration] {} completed successfully.", MIGRATION_VERSION);
+            log.info("[DB-Migration] {} completed successfully.", version);
         } catch (Exception e) {
-            log.warn("[DB-Migration] skipped due to error: {}", e.getMessage());
+            log.warn("[DB-Migration] {} skipped due to error: {}", version, e.getMessage());
+        }
+    }
+
+    private void runUserProfileExtensionMigration() {
+        final String version = "V20240613_01";
+        final String name = "user_profile_extension";
+        try {
+            if (isMigrationApplied(version)) {
+                log.info("[DB-Migration] {} already applied, skipping.", version);
+                return;
+            }
+
+            log.info("[DB-Migration] Running {}: {}", version, name);
+
+            addColumnIfMissing("users", "id_card", "VARCHAR(18) DEFAULT NULL");
+            addColumnIfMissing("users", "license_number", "VARCHAR(20) DEFAULT NULL");
+            addColumnIfMissing("users", "company_name", "VARCHAR(100) DEFAULT NULL");
+            addColumnIfMissing("users", "credit_code", "VARCHAR(18) DEFAULT NULL");
+            addColumnIfMissing("users", "legal_person_name", "VARCHAR(50) DEFAULT NULL");
+            addColumnIfMissing("users", "legal_person_id_card", "VARCHAR(18) DEFAULT NULL");
+            addColumnIfMissing("users", "profile_complete", "TINYINT DEFAULT 0");
+
+            addUniqueIndexIfMissing("users", "idx_id_card", "id_card");
+            addUniqueIndexIfMissing("users", "idx_license_number", "license_number");
+            addUniqueIndexIfMissing("users", "idx_credit_code", "credit_code");
+
+            markMigrationApplied(version, name);
+
+            log.info("[DB-Migration] {} completed successfully.", version);
+        } catch (Exception e) {
+            log.warn("[DB-Migration] {} skipped due to error: {}", version, e.getMessage());
         }
     }
 
@@ -122,12 +160,12 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         );
     }
 
-    private boolean isMigrationApplied() {
+    private boolean isMigrationApplied(String version) {
         try {
             Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM schema_migrations WHERE version = ?",
                 Integer.class,
-                MIGRATION_VERSION
+                version
             );
             return count != null && count > 0;
         } catch (Exception e) {
@@ -135,10 +173,10 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         }
     }
 
-    private void markMigrationApplied() {
+    private void markMigrationApplied(String version, String name) {
         jdbcTemplate.update(
             "INSERT IGNORE INTO schema_migrations(version, name) VALUES (?, ?)",
-            MIGRATION_VERSION, MIGRATION_NAME
+            version, name
         );
     }
 
@@ -191,6 +229,21 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             log.info("[DB-Migration] Index {} created on {}.", indexName, table);
         } else {
             log.info("[DB-Migration] Index {} on {} already exists, skip add.", indexName, table);
+        }
+    }
+
+    private void addUniqueIndexIfMissing(String table, String indexName, String column) {
+        if (!indexExists(table, indexName)) {
+            String sql = String.format("CREATE UNIQUE INDEX %s ON %s(%s)", indexName, table, column);
+            log.info("[DB-Migration] Executing: {}", sql);
+            try {
+                jdbcTemplate.execute(sql);
+                log.info("[DB-Migration] Unique index {} created on {}.", indexName, table);
+            } catch (Exception e) {
+                log.warn("[DB-Migration] Unique index {} creation skipped (possibly duplicate data): {}", indexName, e.getMessage());
+            }
+        } else {
+            log.info("[DB-Migration] Unique index {} on {} already exists, skip add.", indexName, table);
         }
     }
 

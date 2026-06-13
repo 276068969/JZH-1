@@ -20,6 +20,20 @@ public class User {
 
     private String userType;
 
+    private String idCard;
+
+    private String licenseNumber;
+
+    private String companyName;
+
+    private String creditCode;
+
+    private String legalPersonName;
+
+    private String legalPersonIdCard;
+
+    private Integer profileComplete;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
