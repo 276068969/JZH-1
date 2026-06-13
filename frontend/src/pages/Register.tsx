@@ -78,12 +78,28 @@ const FIELD_LABELS: Record<string, string> = {
   legalPersonIdCard: '法人代表身份证号'
 }
 
+const sanitizeErrorProfileHint = (
+  raw: string | null | undefined,
+  userType: UserType,
+  errorCount: number
+): string | null => {
+  if (errorCount <= 0) return raw ?? null
+  const misleadingKeywords = ['资料完整', '可直接', '可前往', '可浏览', '下单', '申请']
+  const hasMisleading = misleadingKeywords.some(k => (raw || '').includes(k))
+  if (!raw || hasMisleading) {
+    const prefix = userType === 'enterprise' ? '企业资质' : '实名信息'
+    return `${prefix}存在 ${errorCount} 项问题，请修正页面中标红的字段后重新提交`
+  }
+  return raw
+}
+
 const Register: React.FC = () => {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [userType, setUserType] = useState<UserType>('personal')
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
   const [profileHint, setProfileHint] = useState<string | null>(null)
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const navigate = useNavigate()
 
   const personalRequiredFields = useMemo(
@@ -97,6 +113,8 @@ const Register: React.FC = () => {
 
   useEffect(() => {
     setServerErrors({})
+    setProfileHint(null)
+    setSubmitStatus('idle')
     form.setFields([
       { name: 'idCard', errors: [] },
       { name: 'licenseNumber', errors: [] },
@@ -125,6 +143,7 @@ const Register: React.FC = () => {
   const onFinish = async (values: any) => {
     setLoading(true)
     setServerErrors({})
+    setSubmitStatus('idle')
     try {
       const payload = {
         ...values,
@@ -137,6 +156,7 @@ const Register: React.FC = () => {
       if (data && data.success) {
         applyServerErrors([])
         setProfileHint(data.profile?.nextStepHint || null)
+        setSubmitStatus('success')
         const typeLabel = userType === 'enterprise' ? '企业账户' : '个人账户'
         message.success({
           content: `${typeLabel}${data.message || '注册成功'}，请登录`,
@@ -144,9 +164,15 @@ const Register: React.FC = () => {
         })
         setTimeout(() => navigate('/login'), 900)
       } else {
-        applyServerErrors(data?.fieldErrors)
-        setProfileHint(data?.profile?.nextStepHint || null)
-        const first = data?.fieldErrors?.[0]
+        const errors = data?.fieldErrors
+        applyServerErrors(errors)
+        setSubmitStatus('error')
+        setProfileHint(sanitizeErrorProfileHint(
+          data?.profile?.nextStepHint,
+          userType,
+          errors?.length || 0
+        ))
+        const first = errors?.[0]
         if (first) {
           message.warning(`${FIELD_LABELS[first.field] || first.field}：${first.message}`)
         } else {
@@ -155,8 +181,14 @@ const Register: React.FC = () => {
       }
     } catch (error: any) {
       const respData = error?.response?.data as RegisterRes | undefined
-      applyServerErrors(respData?.fieldErrors)
-      setProfileHint(respData?.profile?.nextStepHint || null)
+      const errors = respData?.fieldErrors
+      applyServerErrors(errors)
+      setSubmitStatus('error')
+      setProfileHint(sanitizeErrorProfileHint(
+        respData?.profile?.nextStepHint,
+        userType,
+        errors?.length || 0
+      ))
       const msg = respData?.message || error.message || '注册失败，请稍后重试'
       message.error(msg)
     } finally {
@@ -201,7 +233,7 @@ const Register: React.FC = () => {
 
       {profileHint && (
         <Alert
-          type={Object.keys(serverErrors).length ? 'warning' : 'success'}
+          type={submitStatus === 'error' || Object.keys(serverErrors).length > 0 ? 'warning' : submitStatus === 'success' ? 'success' : 'info'}
           showIcon
           style={{ marginBottom: 16 }}
           message={profileHint}

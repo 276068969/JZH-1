@@ -17,7 +17,9 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 @Service
@@ -56,6 +58,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         "username", "password", "email", "phone", "companyName", "creditCode",
         "legalPersonName", "legalPersonIdCard"
     );
+
+    private static final Map<String, String> FIELD_LABELS;
+    static {
+        FIELD_LABELS = new HashMap<>();
+        FIELD_LABELS.put("username", "用户名");
+        FIELD_LABELS.put("password", "密码");
+        FIELD_LABELS.put("confirmPassword", "确认密码");
+        FIELD_LABELS.put("email", "邮箱");
+        FIELD_LABELS.put("phone", "手机号");
+        FIELD_LABELS.put("userType", "账户类型");
+        FIELD_LABELS.put("idCard", "身份证号");
+        FIELD_LABELS.put("licenseNumber", "驾驶证号");
+        FIELD_LABELS.put("companyName", "公司全称");
+        FIELD_LABELS.put("creditCode", "统一社会信用代码");
+        FIELD_LABELS.put("legalPersonName", "法人代表姓名");
+        FIELD_LABELS.put("legalPersonIdCard", "法人身份证号");
+    }
 
     @Override
     @Deprecated
@@ -144,7 +163,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             .userType(user.getUserType())
             .build();
 
-        RegisterResponseVO.ProfileInfo profileInfo = buildProfileInfo(userType, request, true);
+        RegisterResponseVO.ProfileInfo profileInfo = buildProfileInfo(userType, request, true, fieldErrors);
 
         String successMsg = isEnterprise
             ? "企业账户注册成功，请使用企业租车申请通道提交用车需求"
@@ -334,14 +353,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             .message("注册资料校验未通过，请检查以下字段")
             .data(null)
             .fieldErrors(errors)
-            .profile(buildProfileInfo(userType, request, false))
+            .profile(buildProfileInfo(userType, request, false, errors))
             .build();
     }
 
     private RegisterResponseVO.ProfileInfo buildProfileInfo(
         String userType,
         RegisterRequestDTO req,
-        boolean forceComplete
+        boolean forceComplete,
+        List<RegisterResponseVO.FieldError> errors
     ) {
         List<String> required = "enterprise".equals(userType) ? ENTERPRISE_REQUIRED : PERSONAL_REQUIRED;
         List<String> missing = new ArrayList<>();
@@ -351,17 +371,45 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 missing.add(f);
             }
         }
-        boolean complete = forceComplete || missing.isEmpty();
+
+        List<String> invalidFields = new ArrayList<>();
+        if (errors != null) {
+            for (RegisterResponseVO.FieldError fe : errors) {
+                invalidFields.add(fe.getField());
+                if (!missing.contains(fe.getField()) && required.contains(fe.getField())) {
+                    missing.add(fe.getField());
+                }
+            }
+        }
+
+        boolean hasAnyError = errors != null && !errors.isEmpty();
+        boolean complete = !hasAnyError && (forceComplete || (missing.isEmpty() && invalidFields.isEmpty()));
+
         String hint;
-        if ("enterprise".equals(userType)) {
+        if (hasAnyError) {
+            if ("enterprise".equals(userType)) {
+                hint = String.format(
+                    "企业资质存在 %d 项问题，请修正标红字段后重新提交（%s）",
+                    errors.size(),
+                    joinFieldLabels(invalidFields)
+                );
+            } else {
+                hint = String.format(
+                    "实名信息存在 %d 项问题，请修正标红字段后重新提交（%s）",
+                    errors.size(),
+                    joinFieldLabels(invalidFields)
+                );
+            }
+        } else if ("enterprise".equals(userType)) {
             hint = complete
                 ? "资料完整，可前往企业用车通道申请批量租车服务"
-                : "请补充企业资质信息后再提交申请";
+                : "请补充企业资质信息后再提交申请：缺少 " + joinFieldLabels(missing);
         } else {
             hint = complete
                 ? "资料完整，可直接浏览车辆并下单"
-                : "请补充身份证和驾驶证信息后再进行租车";
+                : "请补充身份证和驾驶证信息后再进行租车：缺少 " + joinFieldLabels(missing);
         }
+
         return RegisterResponseVO.ProfileInfo.builder()
             .userType(userType)
             .complete(complete)
@@ -424,5 +472,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private static String trim(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    private static String joinFieldLabels(List<String> fields) {
+        if (fields == null || fields.isEmpty()) return "";
+        List<String> labels = new ArrayList<>();
+        for (String f : fields) {
+            String label = FIELD_LABELS.get(f);
+            labels.add(label != null ? label : f);
+        }
+        return String.join("、", labels);
     }
 }
