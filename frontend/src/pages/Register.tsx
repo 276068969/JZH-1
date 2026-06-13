@@ -260,7 +260,7 @@ const Register: React.FC = () => {
               { required: currentRequired.includes('email'), message: '请输入邮箱' },
               { type: 'email', message: '请输入有效邮箱，如 name@example.com' },
               {
-                validator: (_, value) => {
+                validator: (_rule, _value) => {
                   if (serverErrors.email) {
                     return Promise.reject(new Error(serverErrors.email))
                   }
@@ -285,7 +285,7 @@ const Register: React.FC = () => {
               { required: currentRequired.includes('phone'), message: '请输入手机号' },
               { pattern: phonePattern, message: '请输入 11 位中国大陆手机号' },
               {
-                validator: (_, value) => {
+                validator: (_rule, _value) => {
                   if (serverErrors.phone) {
                     return Promise.reject(new Error(serverErrors.phone))
                   }
@@ -375,7 +375,7 @@ const Register: React.FC = () => {
                 rules={[
                   { required: true, message: '请输入身份证号' },
                   {
-                    validator: (_, value) => {
+                    validator: (_rule, value) => {
                       if (!value) return Promise.resolve()
                       if (!idCardPattern.test(value)) {
                         return Promise.reject(new Error('请输入 18 位有效身份证号'))
@@ -413,7 +413,7 @@ const Register: React.FC = () => {
                   { required: true, message: '请输入机动车驾驶证号' },
                   { pattern: licensePattern, message: '8-20 位字母或数字' },
                   {
-                    validator: (_, value) => {
+                    validator: (_rule, _value) => {
                       if (serverErrors.licenseNumber) {
                         return Promise.reject(new Error(serverErrors.licenseNumber))
                       }
@@ -459,7 +459,7 @@ const Register: React.FC = () => {
                 { required: true, message: '请填写公司全称' },
                 { min: 4, message: '公司名称至少 4 个字符' },
                 {
-                  validator: (_, value) => {
+                  validator: (_rule, _value) => {
                     if (serverErrors.companyName) {
                       return Promise.reject(new Error(serverErrors.companyName))
                     }
@@ -518,7 +518,7 @@ const Register: React.FC = () => {
                   { required: true, message: '请填写法人代表姓名' },
                   { min: 2, message: '至少 2 个字符' },
                   {
-                    validator: (_, value) => {
+                    validator: (_rule, _value) => {
                       if (serverErrors.legalPersonName) {
                         return Promise.reject(new Error(serverErrors.legalPersonName))
                       }
