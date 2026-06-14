@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -46,8 +47,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException("车辆不可用");
         }
 
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        LocalDateTime startDateTime = LocalDate.parse(startDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")).atStartOfDay();
+        LocalDateTime endDateTime = LocalDate.parse(endDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")).atStartOfDay();
 
         com.carrental.entity.User user = userService.getById(userId);
         String userType = user != null ? user.getUserType() : "personal";
@@ -129,7 +130,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException("仅待取车和已取车的订单可续租");
         }
 
-        LocalDateTime newEnd = LocalDateTime.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        LocalDateTime newEnd = LocalDate.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")).atStartOfDay();
         LocalDateTime currentEnd = order.getEndDate();
 
         if (!newEnd.isAfter(currentEnd)) {
@@ -177,7 +178,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException("仅待取车和已取车的订单可续租");
         }
 
-        LocalDateTime newEnd = LocalDateTime.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        LocalDateTime newEnd = LocalDate.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")).atStartOfDay();
         LocalDateTime currentEnd = order.getEndDate();
 
         if (!newEnd.isAfter(currentEnd)) {

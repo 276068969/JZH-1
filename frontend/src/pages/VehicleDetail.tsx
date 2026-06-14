@@ -234,6 +234,25 @@ const VehicleDetail: React.FC = () => {
     }
   }
 
+  const getLocalFallbackPrice = () => {
+    if (!dates || !dates[0] || !dates[1] || !vehicle) return null
+    const days = dates[1].diff(dates[0], 'day') + 1
+    return {
+      vehicleId: vehicle.id,
+      vehicleName: vehicle.name,
+      dailyPrice: vehicle.price,
+      rentalDays: days,
+      basePrice: vehicle.price * days,
+      discounts: [],
+      totalDiscount: 0,
+      totalPrice: vehicle.price * days,
+      feeItems: [
+        { name: `基础租车费（¥${vehicle.price} × ${days}天）`, amount: vehicle.price * days }
+      ],
+      _fallback: true
+    }
+  }
+
   const fetchPriceCalculation = async () => {
     if (!dates || !dates[0] || !dates[1] || !id) {
       setPriceResult(null)
@@ -249,10 +268,18 @@ const VehicleDetail: React.FC = () => {
       if (response.data?.code === 200 && response.data?.data) {
         setPriceResult(response.data.data)
       } else {
-        setPriceResult(null)
+        const fallback = getLocalFallbackPrice()
+        setPriceResult(fallback)
+        if (response.data?.message) {
+          message.warning(response.data.message)
+        }
       }
-    } catch {
-      setPriceResult(null)
+    } catch (e: any) {
+      const fallback = getLocalFallbackPrice()
+      setPriceResult(fallback)
+      if (e?.response?.status === 401) {
+        message.warning('登录状态异常，使用本地估算价格')
+      }
     } finally {
       setPriceLoading(false)
     }
@@ -260,7 +287,7 @@ const VehicleDetail: React.FC = () => {
 
   useEffect(() => {
     fetchPriceCalculation()
-  }, [dates, id])
+  }, [dates, id, vehicle])
 
   const handleRent = async () => {
     if (!dates || !dates[0] || !dates[1]) {
@@ -533,18 +560,33 @@ const VehicleDetail: React.FC = () => {
                     <div style={{ textAlign: 'center', color: '#999', padding: '8px 0' }}>计算中...</div>
                   ) : priceResult ? (
                     <>
-                      {priceResult.feeItems && priceResult.feeItems.map((item: any, idx: number) => (
-                        <div key={idx} style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          marginBottom: idx < priceResult.feeItems.length - 1 ? '6px' : '0',
-                          fontSize: item.amount < 0 ? '0.875rem' : undefined,
-                          color: item.amount < 0 ? '#52c41a' : undefined
+                      {priceResult._fallback && (
+                        <div style={{
+                          fontSize: '0.75rem',
+                          color: '#fa8c16',
+                          background: '#fff7e6',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          marginBottom: '8px'
                         }}>
-                          <span>{item.name}</span>
-                          <span>¥{Math.abs(item.amount).toFixed(2)}</span>
+                          服务端暂不可用，以下为本地估算（优惠折扣可能未计入）
                         </div>
-                      ))}
+                      )}
+                      {priceResult.feeItems && priceResult.feeItems.map((item: any, idx: number) => {
+                        const amt = Number(item.amount)
+                        return (
+                          <div key={idx} style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: idx < priceResult.feeItems.length - 1 ? '6px' : '0',
+                            fontSize: amt < 0 ? '0.875rem' : undefined,
+                            color: amt < 0 ? '#52c41a' : undefined
+                          }}>
+                            <span>{item.name}</span>
+                            <span>¥{Math.abs(amt).toFixed(2)}</span>
+                          </div>
+                        )
+                      })}
                       <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -555,11 +597,11 @@ const VehicleDetail: React.FC = () => {
                         borderTop: '1px dashed #d9d9d9'
                       }}>
                         <span>总计</span>
-                        <span style={{ color: '#ff4d4f' }}>¥{priceResult.totalPrice}</span>
+                        <span style={{ color: '#ff4d4f' }}>¥{Number(priceResult.totalPrice).toFixed(2)}</span>
                       </div>
                       {priceResult.discounts && priceResult.discounts.length > 0 && (
                         <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#999' }}>
-                          已优惠 ¥{priceResult.totalDiscount}
+                          已优惠 ¥{Number(priceResult.totalDiscount).toFixed(2)}
                         </div>
                       )}
                     </>
