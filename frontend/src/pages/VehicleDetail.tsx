@@ -663,7 +663,7 @@ const VehicleDetail: React.FC = () => {
         )}
       </Card>
 
-      {recentViewed.length > 0 && (
+      {(recentViewedLoading || recentViewed.length > 0) && (
         <Card
           style={{ marginTop: '24px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
           title={
@@ -673,48 +673,54 @@ const VehicleDetail: React.FC = () => {
             </span>
           }
         >
-          <Row gutter={[16, 16]}>
-            {recentViewed.map(v => (
-              <Col xs={24} sm={12} md={6} key={v.id}>
-                <Link to={`/vehicles/${v.id}`} style={{ textDecoration: 'none' }}>
-                  <div
-                    style={{
-                      background: '#f8f9fa',
-                      borderRadius: '12px',
-                      padding: '16px',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      height: '100%',
-                      border: v.available ? 'none' : '1px dashed #d9d9d9'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-4px)'
-                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)'
-                      e.currentTarget.style.boxShadow = 'none'
-                    }}
-                  >
-                    <div style={{ fontSize: '2.5rem', textAlign: 'center', marginBottom: '8px' }}>🚗</div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#333' }}>{v.name}</h4>
-                    <div style={{ color: v.available ? '#ff4d4f' : '#999', fontWeight: 'bold', marginBottom: '4px' }}>
-                      ¥{v.price}/天
+          {recentViewedLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Spin size="large" tip="正在加载最近浏览..." />
+            </div>
+          ) : (
+            <Row gutter={[16, 16]}>
+              {recentViewed.map(v => (
+                <Col xs={24} sm={12} md={6} key={v.id}>
+                  <Link to={`/vehicles/${v.id}`} style={{ textDecoration: 'none' }}>
+                    <div
+                      style={{
+                        background: '#f8f9fa',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        height: '100%',
+                        border: v.available ? 'none' : '1px dashed #d9d9d9'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-4px)'
+                        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    >
+                      <div style={{ fontSize: '2.5rem', textAlign: 'center', marginBottom: '8px' }}>🚗</div>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#333' }}>{v.name}</h4>
+                      <div style={{ color: v.available ? '#ff4d4f' : '#999', fontWeight: 'bold', marginBottom: '4px' }}>
+                        ¥{v.price}/天
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '4px' }}>
+                        {v.type} · ⭐ {v.rating}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#999' }}>
+                        📍 {v.location}
+                      </div>
+                      {!v.available && (
+                        <Tag color="default" style={{ marginTop: '8px' }}>已租满</Tag>
+                      )}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#999', marginBottom: '4px' }}>
-                      {v.type} · ⭐ {v.rating}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#999' }}>
-                      📍 {v.location}
-                    </div>
-                    {!v.available && (
-                      <Tag color="default" style={{ marginTop: '8px' }}>已租满</Tag>
-                    )}
-                  </div>
-                </Link>
-              </Col>
-            ))}
-          </Row>
+                  </Link>
+                </Col>
+              ))}
+            </Row>
+          )}
         </Card>
       )}
     </div>
