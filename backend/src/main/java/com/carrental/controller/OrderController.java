@@ -184,4 +184,72 @@ public class OrderController {
             return ResponseEntity.ok(response);
         }
     }
+
+    @PostMapping("/{id}/pickup")
+    public ResponseEntity<?> confirmPickup(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> params) {
+        try {
+            Long userId = jwtAuthHelper.getCurrentUserIdRequired();
+
+            String pickupNote = params != null && params.get("pickupNote") != null ? params.get("pickupNote").toString() : null;
+            Double pickupOdometer = params != null && params.get("pickupOdometer") != null ? Double.valueOf(params.get("pickupOdometer").toString()) : null;
+
+            Order order = orderService.confirmPickup(id, userId, pickupNote, pickupOdometer);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "取车确认成功");
+            response.put("data", order);
+
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> response = new HashMap<>();
+            if (e.getMessage().contains("未登录")) {
+                response.put("code", 401);
+                response.put("message", e.getMessage());
+                return ResponseEntity.status(401).body(response);
+            }
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        }
+    }
+
+    @PostMapping("/{id}/return")
+    public ResponseEntity<?> confirmReturn(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> params) {
+        try {
+            Long userId = jwtAuthHelper.getCurrentUserIdRequired();
+
+            String returnNote = params != null && params.get("returnNote") != null ? params.get("returnNote").toString() : null;
+            Double returnOdometer = params != null && params.get("returnOdometer") != null ? Double.valueOf(params.get("returnOdometer").toString()) : null;
+
+            Order order = orderService.confirmReturn(id, userId, returnNote, returnOdometer);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 200);
+            response.put("message", "还车确认成功");
+            response.put("data", order);
+
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, Object> response = new HashMap<>();
+            if (e.getMessage().contains("未登录")) {
+                response.put("code", 401);
+                response.put("message", e.getMessage());
+                return ResponseEntity.status(401).body(response);
+            }
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("code", 500);
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
+        }
+    }
 }

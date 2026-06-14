@@ -18,4 +18,7 @@ public interface OrderService extends IService<Order> {
     void refreshOrderStatus(Order order);
     void refreshAllPendingOrders();
     UserRentalOverviewDTO getUserRentalOverview(Long userId);
+
+    Order confirmPickup(Long orderId, Long userId, String pickupNote, Double pickupOdometer);
+    Order confirmReturn(Long orderId, Long userId, String returnNote, Double returnOdometer);
 }

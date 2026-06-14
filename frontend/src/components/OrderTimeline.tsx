@@ -9,7 +9,8 @@ import {
   DeleteOutlined,
   InfoCircleOutlined,
   ReloadOutlined,
-  RetweetOutlined
+  RetweetOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons'
 
 export interface OrderItem {
@@ -24,9 +25,15 @@ export interface OrderItem {
   startDate: string
   endDate: string
   totalPrice: number
-  status: 'pending' | 'active' | 'completed' | 'cancelled'
+  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'picked_up' | 'returned'
   renewCount?: number
   createTime: string
+  pickupTime?: string
+  pickupNote?: string
+  pickupOdometer?: number
+  returnTime?: string
+  returnNote?: string
+  returnOdometer?: number
 }
 
 interface OrderTimelineProps {
@@ -36,6 +43,8 @@ interface OrderTimelineProps {
   onCancel?: (orderId: number) => void
   onRenew?: (order: OrderItem) => void
   onReRent?: (order: OrderItem) => void
+  onPickup?: (order: OrderItem) => void
+  onReturn?: (order: OrderItem) => void
 }
 
 const getStatusConfig = (status: string) => {
@@ -51,6 +60,18 @@ const getStatusConfig = (status: string) => {
       text: '使用中',
       bgColor: '#f6ffed',
       borderColor: '#b7eb8f'
+    },
+    picked_up: {
+      color: '#13c2c2',
+      text: '已取车·待还车',
+      bgColor: '#e6fffb',
+      borderColor: '#87e8de'
+    },
+    returned: {
+      color: '#722ed1',
+      text: '已还车',
+      bgColor: '#f9f0ff',
+      borderColor: '#d3adf7'
     },
     completed: {
       color: '#1890ff',
@@ -119,8 +140,12 @@ const groupOrders = (orders: OrderItem[]) => {
 
     if (order.status === 'cancelled') {
       completed.push(order)
-    } else if (order.status === 'completed') {
+    } else if (order.status === 'completed' || order.status === 'returned') {
       completed.push(order)
+    } else if (order.status === 'picked_up') {
+      active.push(order)
+    } else if (order.status === 'active') {
+      active.push(order)
     } else if (now >= startDate && now <= endDate) {
       active.push(order)
     } else if (now < startDate) {
@@ -146,7 +171,9 @@ const OrderCard: React.FC<{
   onCancel?: (orderId: number) => void
   onRenew?: (order: OrderItem) => void
   onReRent?: (order: OrderItem) => void
-}> = ({ order, onViewDetail, onCancel, onRenew, onReRent }) => {
+  onPickup?: (order: OrderItem) => void
+  onReturn?: (order: OrderItem) => void
+}> = ({ order, onViewDetail, onCancel, onRenew, onReRent, onPickup, onReturn }) => {
   const statusConfig = getStatusConfig(order.status)
   const startInfo = formatDate(order.startDate)
   const endInfo = formatDate(order.endDate)
@@ -198,9 +225,25 @@ const OrderCard: React.FC<{
               {daysUntil}天后取车
             </div>
           )}
+          {order.status === 'pending' && daysUntil <= 0 && (
+            <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#fa8c16' }}>
+              <ClockCircleOutlined style={{ marginRight: '4px' }} />
+              今日可取车
+            </div>
+          )}
           {order.status === 'active' && (
             <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#52c41a' }}>
               <Badge status="processing" color="#52c41a" text="进行中" />
+            </div>
+          )}
+          {order.status === 'picked_up' && (
+            <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#13c2c2' }}>
+              <Badge status="processing" color="#13c2c2" text="使用中·待还车" />
+            </div>
+          )}
+          {order.status === 'returned' && (
+            <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#722ed1' }}>
+              <Badge status="success" color="#722ed1" text="履约完成" />
             </div>
           )}
         </div>
@@ -281,7 +324,41 @@ const OrderCard: React.FC<{
               )}
             </div>
           </div>
-          {(order.status === 'pending' || order.status === 'active') && onRenew && (
+          {order.status === 'pending' && onPickup && (
+            <Button
+              type="primary"
+              size="small"
+              icon={<CarOutlined />}
+              style={{
+                background: 'linear-gradient(135deg, #fa8c16 0%, #ffa940 100%)',
+                border: 'none'
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onPickup(order)
+              }}
+            >
+              确认取车
+            </Button>
+          )}
+          {order.status === 'picked_up' && onReturn && (
+            <Button
+              type="primary"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              style={{
+                background: 'linear-gradient(135deg, #13c2c2 0%, #36cfc9 100%)',
+                border: 'none'
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onReturn(order)
+              }}
+            >
+              确认还车
+            </Button>
+          )}
+          {(order.status === 'pending' || order.status === 'active' || order.status === 'picked_up') && onRenew && (
             <Button
               type="text"
               size="small"
@@ -295,7 +372,7 @@ const OrderCard: React.FC<{
               续租
             </Button>
           )}
-          {order.status === 'completed' && onReRent && (
+          {(order.status === 'completed' || order.status === 'returned') && onReRent && (
             <Button
               type="text"
               size="small"
@@ -372,7 +449,7 @@ const SectionHeader: React.FC<{
   </div>
 )
 
-const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDetail, onCancel, onRenew, onReRent }) => {
+const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDetail, onCancel, onRenew, onReRent, onPickup, onReturn }) => {
   const { upcoming, active, completed } = groupOrders(orders)
 
   return (
@@ -393,6 +470,8 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               onCancel={onCancel}
               onRenew={onRenew}
               onReRent={onReRent}
+              onPickup={onPickup}
+              onReturn={onReturn}
             />
           ))}
         </div>
@@ -414,6 +493,8 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               onCancel={onCancel}
               onRenew={onRenew}
               onReRent={onReRent}
+              onPickup={onPickup}
+              onReturn={onReturn}
             />
           ))}
         </div>
@@ -435,6 +516,8 @@ const OrderTimeline: React.FC<OrderTimelineProps> = ({ orders, loading, onViewDe
               onCancel={onCancel}
               onRenew={onRenew}
               onReRent={onReRent}
+              onPickup={onPickup}
+              onReturn={onReturn}
             />
           ))}
         </div>

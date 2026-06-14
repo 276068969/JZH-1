@@ -14,6 +14,12 @@ public class OrderDTO {
     private BigDecimal totalPrice;
     private String status;
     private Integer renewCount;
+    private LocalDateTime pickupTime;
+    private String pickupNote;
+    private BigDecimal pickupOdometer;
+    private LocalDateTime returnTime;
+    private String returnNote;
+    private BigDecimal returnOdometer;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 

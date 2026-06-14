@@ -41,6 +41,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             ensureSchemaMigrationsTable();
             runVehicleStructuredSpecsMigration();
             runUserProfileExtensionMigration();
+            runPickupReturnConfirmationMigration();
         } catch (Exception e) {
             log.warn("[DB-Migration] skipped due to error: {}", e.getMessage());
         }
@@ -104,6 +105,35 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             addUniqueIndexIfMissing("users", "idx_id_card", "id_card");
             addUniqueIndexIfMissing("users", "idx_license_number", "license_number");
             addUniqueIndexIfMissing("users", "idx_credit_code", "credit_code");
+
+            markMigrationApplied(version, name);
+
+            log.info("[DB-Migration] {} completed successfully.", version);
+        } catch (Exception e) {
+            log.warn("[DB-Migration] {} skipped due to error: {}", version, e.getMessage());
+        }
+    }
+
+    private void runPickupReturnConfirmationMigration() {
+        final String version = "V20240614_01";
+        final String name = "pickup_return_confirmation";
+        try {
+            if (isMigrationApplied(version)) {
+                log.info("[DB-Migration] {} already applied, skipping.", version);
+                return;
+            }
+
+            log.info("[DB-Migration] Running {}: {}", version, name);
+
+            addColumnIfMissing("orders", "pickup_time", "DATETIME DEFAULT NULL");
+            addColumnIfMissing("orders", "pickup_note", "VARCHAR(500) DEFAULT NULL");
+            addColumnIfMissing("orders", "pickup_odometer", "DECIMAL(10,1) DEFAULT NULL");
+            addColumnIfMissing("orders", "return_time", "DATETIME DEFAULT NULL");
+            addColumnIfMissing("orders", "return_note", "VARCHAR(500) DEFAULT NULL");
+            addColumnIfMissing("orders", "return_odometer", "DECIMAL(10,1) DEFAULT NULL");
+
+            addIndexIfMissing("orders", "idx_pickup_time", "pickup_time");
+            addIndexIfMissing("orders", "idx_return_time", "return_time");
 
             markMigrationApplied(version, name);
 

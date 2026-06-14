@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Card, Table, Tag, Button, Modal, message, Tabs, Descriptions, Radio, DatePicker, Alert, Divider, Row, Col, Empty, Badge } from 'antd'
+import { Card, Table, Tag, Button, Modal, message, Tabs, Descriptions, Radio, DatePicker, Alert, Divider, Row, Col, Empty, Badge, Steps, Input, InputNumber, Form } from 'antd'
 import {
   EnvironmentOutlined,
   CalendarOutlined,
@@ -40,9 +40,15 @@ interface Order {
   startDate: string
   endDate: string
   totalPrice: number
-  status: 'pending' | 'active' | 'completed' | 'cancelled'
+  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'picked_up' | 'returned'
   renewCount?: number
   createTime: string
+  pickupTime?: string
+  pickupNote?: string
+  pickupOdometer?: number
+  returnTime?: string
+  returnNote?: string
+  returnOdometer?: number
 }
 
 interface EnterpriseApplication {
@@ -107,6 +113,18 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
   const [checkingReRentAvailability, setCheckingReRentAvailability] = useState(false)
   const [reRentAvailable, setReRentAvailable] = useState<boolean | null>(null)
 
+  const [pickupModalVisible, setPickupModalVisible] = useState(false)
+  const [pickupOrder, setPickupOrder] = useState<Order | null>(null)
+  const [pickupNote, setPickupNote] = useState('')
+  const [pickupOdometer, setPickupOdometer] = useState<string>('')
+  const [confirmingPickup, setConfirmingPickup] = useState(false)
+
+  const [returnModalVisible, setReturnModalVisible] = useState(false)
+  const [returnOrder, setReturnOrder] = useState<Order | null>(null)
+  const [returnNote, setReturnNote] = useState('')
+  const [returnOdometer, setReturnOdometer] = useState<string>('')
+  const [confirmingReturn, setConfirmingReturn] = useState(false)
+
   const [applications, setApplications] = useState<EnterpriseApplication[]>([])
   const [loadingApplications, setLoadingApplications] = useState(false)
   const [applicationsError, setApplicationsError] = useState<string | null>(null)
@@ -145,7 +163,13 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
           totalPrice: item.totalPrice,
           status: item.status,
           renewCount: item.renewCount || 0,
-          createTime: item.createTime
+          createTime: item.createTime,
+          pickupTime: item.pickupTime,
+          pickupNote: item.pickupNote,
+          pickupOdometer: item.pickupOdometer,
+          returnTime: item.returnTime,
+          returnNote: item.returnNote,
+          returnOdometer: item.returnOdometer
         }))
         setOrders(mappedOrders)
       } else {
@@ -360,10 +384,92 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
     return reRentOrder.vehiclePrice * reRentDays
   }
 
+  const handlePickup = (order: Order) => {
+    setPickupOrder(order)
+    setPickupNote('')
+    setPickupOdometer('')
+    setPickupModalVisible(true)
+  }
+
+  const handleConfirmPickup = async () => {
+    if (!pickupOrder) return
+
+    setConfirmingPickup(true)
+    try {
+      const params: any = {}
+      if (pickupNote.trim()) {
+        params.pickupNote = pickupNote.trim()
+      }
+      if (pickupOdometer.trim() && !isNaN(parseFloat(pickupOdometer))) {
+        params.pickupOdometer = parseFloat(pickupOdometer)
+      }
+
+      const response = await axios.post(`/api/orders/${pickupOrder.id}/pickup`,
+        Object.keys(params).length > 0 ? params : undefined
+      )
+
+      if (response.data?.code === 200) {
+        message.success('取车确认成功！祝您用车愉快')
+        setPickupModalVisible(false)
+        loadOrders()
+      } else if (response.data?.code === 401) {
+        message.error('登录已过期，请重新登录')
+      } else {
+        message.error(response.data?.message || '取车确认失败')
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '取车确认失败，请稍后重试')
+    } finally {
+      setConfirmingPickup(false)
+    }
+  }
+
+  const handleReturn = (order: Order) => {
+    setReturnOrder(order)
+    setReturnNote('')
+    setReturnOdometer('')
+    setReturnModalVisible(true)
+  }
+
+  const handleConfirmReturn = async () => {
+    if (!returnOrder) return
+
+    setConfirmingReturn(true)
+    try {
+      const params: any = {}
+      if (returnNote.trim()) {
+        params.returnNote = returnNote.trim()
+      }
+      if (returnOdometer.trim() && !isNaN(parseFloat(returnOdometer))) {
+        params.returnOdometer = parseFloat(returnOdometer)
+      }
+
+      const response = await axios.post(`/api/orders/${returnOrder.id}/return`,
+        Object.keys(params).length > 0 ? params : undefined
+      )
+
+      if (response.data?.code === 200) {
+        message.success('还车确认成功！感谢您的使用')
+        setReturnModalVisible(false)
+        loadOrders()
+      } else if (response.data?.code === 401) {
+        message.error('登录已过期，请重新登录')
+      } else {
+        message.error(response.data?.message || '还车确认失败')
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '还车确认失败，请稍后重试')
+    } finally {
+      setConfirmingReturn(false)
+    }
+  }
+
   const getOrderStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: 'orange',
       active: 'green',
+      picked_up: 'cyan',
+      returned: 'purple',
       completed: 'blue',
       cancelled: 'red'
     }
@@ -374,6 +480,8 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
     const texts: Record<string, string> = {
       pending: '待取车',
       active: '使用中',
+      picked_up: '已取车·待还车',
+      returned: '已还车',
       completed: '已完成',
       cancelled: '已取消'
     }
@@ -464,14 +572,34 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
       title: '操作',
       key: 'action',
       render: (_: any, record: Order) => (
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           <Button
             type="link"
             onClick={() => setSelectedOrder(record)}
           >
             详情
           </Button>
-          {(record.status === 'pending' || record.status === 'active') && (
+          {record.status === 'pending' && (
+            <Button
+              type="link"
+              icon={<CarOutlined />}
+              style={{ color: '#fa8c16', fontWeight: 500 }}
+              onClick={() => handlePickup(record)}
+            >
+              确认取车
+            </Button>
+          )}
+          {record.status === 'picked_up' && (
+            <Button
+              type="link"
+              icon={<CheckCircleOutlined />}
+              style={{ color: '#13c2c2', fontWeight: 500 }}
+              onClick={() => handleReturn(record)}
+            >
+              确认还车
+            </Button>
+          )}
+          {(record.status === 'pending' || record.status === 'active' || record.status === 'picked_up') && (
             <Button
               type="link"
               icon={<ReloadOutlined />}
@@ -480,7 +608,7 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
               续租
             </Button>
           )}
-          {record.status === 'completed' && (
+          {(record.status === 'completed' || record.status === 'returned') && (
             <Button
               type="link"
               icon={<RetweetOutlined />}
@@ -592,8 +720,8 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
     }
   ]
 
-  const activeOrders = orders.filter(o => o.status === 'active' || o.status === 'pending')
-  const completedOrders = orders.filter(o => o.status === 'completed' || o.status === 'cancelled')
+  const activeOrders = orders.filter(o => o.status === 'active' || o.status === 'pending' || o.status === 'picked_up')
+  const completedOrders = orders.filter(o => o.status === 'completed' || o.status === 'cancelled' || o.status === 'returned')
 
   const pendingApplications = applications.filter(a => a.status === 'pending')
   const processedApplications = applications.filter(a => a.status !== 'pending')
@@ -612,7 +740,13 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
     totalPrice: o.totalPrice,
     status: o.status,
     renewCount: o.renewCount,
-    createTime: o.createTime
+    createTime: o.createTime,
+    pickupTime: o.pickupTime,
+    pickupNote: o.pickupNote,
+    pickupOdometer: o.pickupOdometer,
+    returnTime: o.returnTime,
+    returnNote: o.returnNote,
+    returnOdometer: o.returnOdometer
   }))
 
   const renderPersonalOrders = () => {
@@ -650,6 +784,14 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
           onCancel={handleCancel}
           onRenew={handleRenew}
           onReRent={handleReRent}
+          onPickup={(order) => {
+            const fullOrder = orders.find(o => o.id === order.id)
+            if (fullOrder) handlePickup(fullOrder)
+          }}
+          onReturn={(order) => {
+            const fullOrder = orders.find(o => o.id === order.id)
+            if (fullOrder) handleReturn(fullOrder)
+          }}
         />
       )
     }
@@ -885,11 +1027,45 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
         open={!!selectedOrder}
         onCancel={() => setSelectedOrder(null)}
         footer={[
+          selectedOrder?.status === 'pending' && (
+            <Button
+              key="pickup"
+              type="primary"
+              icon={<CarOutlined />}
+              style={{
+                background: 'linear-gradient(135deg, #fa8c16 0%, #ffa940 100%)',
+                border: 'none'
+              }}
+              onClick={() => {
+                handlePickup(selectedOrder)
+                setSelectedOrder(null)
+              }}
+            >
+              确认取车
+            </Button>
+          ),
+          selectedOrder?.status === 'picked_up' && (
+            <Button
+              key="return"
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              style={{
+                background: 'linear-gradient(135deg, #13c2c2 0%, #36cfc9 100%)',
+                border: 'none'
+              }}
+              onClick={() => {
+                handleReturn(selectedOrder)
+                setSelectedOrder(null)
+              }}
+            >
+              确认还车
+            </Button>
+          ),
           <Button key="close" onClick={() => setSelectedOrder(null)}>
             关闭
           </Button>
-        ]}
-        width={520}
+        ].filter(Boolean) as React.ReactNode[]}
+        width={600}
       >
         {selectedOrder && (
           <div>
@@ -910,8 +1086,113 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
                 <span>{selectedOrder.vehicleType}</span>
                 <span>•</span>
                 <span><StarOutlined /> {selectedOrder.vehicleRating}</span>
+                <span>•</span>
+                <Tag color="white" style={{ margin: 0 }}>
+                  {getOrderStatusText(selectedOrder.status)}
+                </Tag>
               </div>
             </div>
+
+            <Divider orientation="left" style={{ margin: '12px 0 16px 0', fontSize: '0.875rem' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#667eea', fontWeight: 500 }}>
+                <ClockCircleOutlined />
+                履约流程
+              </span>
+            </Divider>
+
+            <Steps
+              direction="vertical"
+              size="small"
+              current={
+                selectedOrder.status === 'cancelled' ? 0 :
+                selectedOrder.status === 'pending' || selectedOrder.status === 'active' ? 1 :
+                selectedOrder.status === 'picked_up' ? 2 :
+                3
+              }
+              status={selectedOrder.status === 'cancelled' ? 'error' : undefined}
+              style={{ marginBottom: '20px' }}
+              items={[
+                {
+                  title: '订单已创建',
+                  description: formatDateTime(selectedOrder.createTime),
+                  status: 'finish'
+                },
+                {
+                  title: '待取车',
+                  description: selectedOrder.pickupTime ? (
+                    <div>
+                      <div>{formatDateTime(selectedOrder.pickupTime)}</div>
+                      {selectedOrder.pickupNote && (
+                        <div style={{ fontSize: '0.8125rem', color: '#666', marginTop: '4px' }}>
+                          <InfoCircleOutlined style={{ marginRight: '4px' }} />
+                          备注：{selectedOrder.pickupNote}
+                        </div>
+                      )}
+                      {selectedOrder.pickupOdometer != null && (
+                        <div style={{ fontSize: '0.8125rem', color: '#666', marginTop: '2px' }}>
+                          取车里程：{selectedOrder.pickupOdometer} km
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span style={{ color: '#999' }}>预计取车日期：{formatDate(selectedOrder.startDate)}</span>
+                  ),
+                  status: selectedOrder.pickupTime ? 'finish' :
+                         (selectedOrder.status === 'pending' || selectedOrder.status === 'active') ? 'process' : 'wait'
+                },
+                {
+                  title: '已取车·使用中',
+                  description: selectedOrder.returnTime ? (
+                    <div>
+                      <div>{formatDateTime(selectedOrder.pickupTime || '')}</div>
+                    </div>
+                  ) : selectedOrder.pickupTime ? (
+                    <div>
+                      <div>取车时间：{formatDateTime(selectedOrder.pickupTime)}</div>
+                      <div style={{ color: '#13c2c2', marginTop: '4px' }}>正在使用中，请按时还车</div>
+                    </div>
+                  ) : (
+                    <span style={{ color: '#999' }}>取车确认后进入此阶段</span>
+                  ),
+                  status: selectedOrder.status === 'picked_up' ? 'process' :
+                         selectedOrder.returnTime ? 'finish' : 'wait'
+                },
+                {
+                  title: '已还车·订单完成',
+                  description: selectedOrder.returnTime ? (
+                    <div>
+                      <div>{formatDateTime(selectedOrder.returnTime)}</div>
+                      {selectedOrder.returnNote && (
+                        <div style={{ fontSize: '0.8125rem', color: '#666', marginTop: '4px' }}>
+                          <InfoCircleOutlined style={{ marginRight: '4px' }} />
+                          备注：{selectedOrder.returnNote}
+                        </div>
+                      )}
+                      {selectedOrder.returnOdometer != null && (
+                        <div style={{ fontSize: '0.8125rem', color: '#666', marginTop: '2px' }}>
+                          还车里程：{selectedOrder.returnOdometer} km
+                          {selectedOrder.pickupOdometer != null && selectedOrder.returnOdometer > selectedOrder.pickupOdometer && (
+                            <span style={{ marginLeft: '8px', color: '#52c41a' }}>
+                              （行驶 {(selectedOrder.returnOdometer - selectedOrder.pickupOdometer).toFixed(1)} km）
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span style={{ color: '#999' }}>预计还车日期：{formatDate(selectedOrder.endDate)}</span>
+                  ),
+                  status: selectedOrder.returnTime ? 'finish' : 'wait'
+                }
+              ]}
+            />
+
+            <Divider orientation="left" style={{ margin: '12px 0 16px 0', fontSize: '0.875rem' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#764ba2', fontWeight: 500 }}>
+                <FileTextOutlined />
+                订单信息
+              </span>
+            </Divider>
 
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="订单号">
@@ -933,6 +1214,9 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
                 <span style={{ color: '#ff4d4f', fontWeight: 'bold', fontSize: '1.125rem' }}>
                   ¥{selectedOrder.totalPrice}
                 </span>
+                {selectedOrder.renewCount && selectedOrder.renewCount > 0 && (
+                  <Tag color="purple" style={{ marginLeft: '8px' }}>已续租 {selectedOrder.renewCount} 次</Tag>
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="订单状态">
                 <Tag color={getOrderStatusColor(selectedOrder.status)}>
@@ -943,7 +1227,7 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
                 {selectedOrder.vehicleDescription || '暂无描述'}
               </Descriptions.Item>
               <Descriptions.Item label="下单时间">
-                {selectedOrder.createTime}
+                {formatDateTime(selectedOrder.createTime)}
               </Descriptions.Item>
             </Descriptions>
           </div>
@@ -1402,6 +1686,235 @@ const Orders: React.FC<OrdersProps> = ({ isEnterpriseUser = false }) => {
             <div style={{ fontSize: '0.75rem', color: '#999', textAlign: 'center' }}>
               <InfoCircleOutlined style={{ marginRight: '4px' }} />
               点击"前往车辆详情确认"后，您可以在车辆详情页最终确认并提交订单
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CarOutlined style={{ color: '#fa8c16' }} />
+            <span>取车确认</span>
+          </div>
+        }
+        open={pickupModalVisible}
+        onCancel={() => setPickupModalVisible(false)}
+        maskClosable={false}
+        footer={[
+          <Button key="cancel" onClick={() => setPickupModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={confirmingPickup}
+            onClick={handleConfirmPickup}
+            style={{
+              background: 'linear-gradient(135deg, #fa8c16 0%, #ffa940 100%)',
+              border: 'none'
+            }}
+          >
+            <CheckCircleOutlined />
+            确认取车
+          </Button>
+        ]}
+        width={520}
+      >
+        {pickupOrder && (
+          <div>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px',
+                border: '1px solid #ffd591'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <CarOutlined style={{ color: '#fa8c16' }} />
+                <span style={{ fontWeight: '600' }}>{pickupOrder.vehicleName}</span>
+              </div>
+              <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                {pickupOrder.vehicleType} · {pickupOrder.vehicleLocation}
+              </div>
+            </div>
+
+            <Alert
+              message="取车前请仔细检查车辆状况"
+              description="请绕车检查外观、轮胎、车灯等，确认车内物品和油电情况。如有异常请在备注中说明。"
+              type="warning"
+              showIcon
+              icon={<InfoCircleOutlined />}
+              style={{ marginBottom: '20px', borderRadius: '8px' }}
+            />
+
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: '20px' }}>
+              <Descriptions.Item label="订单号">
+                #{pickupOrder.id.toString().padStart(6, '0')}
+              </Descriptions.Item>
+              <Descriptions.Item label="取车日期">
+                <CalendarOutlined style={{ marginRight: '6px', color: '#667eea' }} />
+                {formatDate(pickupOrder.startDate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="还车日期">
+                <CalendarOutlined style={{ marginRight: '6px', color: '#764ba2' }} />
+                {formatDate(pickupOrder.endDate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="取车地点">
+                <EnvironmentOutlined style={{ marginRight: '6px', color: '#667eea' }} />
+                {pickupOrder.vehicleLocation}
+              </Descriptions.Item>
+              <Descriptions.Item label="订单总价">
+                <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>¥{pickupOrder.totalPrice}</span>
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Form layout="vertical">
+              <Form.Item label="当前里程表读数（km，选填）">
+                <Input
+                  placeholder="请输入取车时车辆里程表显示的公里数"
+                  value={pickupOdometer}
+                  onChange={(e) => setPickupOdometer(e.target.value)}
+                  prefix={<span style={{ color: '#999' }}>km</span>}
+                  size="large"
+                />
+              </Form.Item>
+              <Form.Item label="取车备注（选填）">
+                <Input.TextArea
+                  placeholder="请记录车辆外观、内饰、油量/电量等状况，如有划痕、损伤等请备注说明"
+                  value={pickupNote}
+                  onChange={(e) => setPickupNote(e.target.value)}
+                  rows={4}
+                  maxLength={500}
+                  showCount
+                  size="large"
+                />
+              </Form.Item>
+            </Form>
+
+            <div style={{ fontSize: '0.75rem', color: '#999', textAlign: 'center', marginTop: '12px' }}>
+              <CheckCircleOutlined style={{ marginRight: '4px', color: '#52c41a' }} />
+              点击"确认取车"即表示您已检查并认可车辆状况，开始计费
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircleOutlined style={{ color: '#13c2c2' }} />
+            <span>还车确认</span>
+          </div>
+        }
+        open={returnModalVisible}
+        onCancel={() => setReturnModalVisible(false)}
+        maskClosable={false}
+        footer={[
+          <Button key="cancel" onClick={() => setReturnModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={confirmingReturn}
+            onClick={handleConfirmReturn}
+            style={{
+              background: 'linear-gradient(135deg, #13c2c2 0%, #36cfc9 100%)',
+              border: 'none'
+            }}
+          >
+            <CheckCircleOutlined />
+            确认还车
+          </Button>
+        ]}
+        width={520}
+      >
+        {returnOrder && (
+          <div>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px',
+                border: '1px solid #87e8de'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <CarOutlined style={{ color: '#13c2c2' }} />
+                <span style={{ fontWeight: '600' }}>{returnOrder.vehicleName}</span>
+              </div>
+              <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                {returnOrder.vehicleType} · {returnOrder.vehicleLocation}
+              </div>
+            </div>
+
+            <Alert
+              message="还车前请整理好个人物品"
+              description="请确认车内没有遗留物品，车辆已熄火、锁好门窗。感谢您的配合！"
+              type="info"
+              showIcon
+              icon={<InfoCircleOutlined />}
+              style={{ marginBottom: '20px', borderRadius: '8px' }}
+            />
+
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: '20px' }}>
+              <Descriptions.Item label="订单号">
+                #{returnOrder.id.toString().padStart(6, '0')}
+              </Descriptions.Item>
+              <Descriptions.Item label="取车时间">
+                {returnOrder.pickupTime ? formatDateTime(returnOrder.pickupTime) : '—'}
+                {returnOrder.pickupOdometer != null && (
+                  <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '4px' }}>
+                    取车里程：{returnOrder.pickupOdometer} km
+                  </div>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="约定还车日期">
+                {formatDate(returnOrder.endDate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="订单总价">
+                <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>¥{returnOrder.totalPrice}</span>
+                {returnOrder.renewCount && returnOrder.renewCount > 0 && (
+                  <Tag color="purple" style={{ marginLeft: '8px' }}>已续租 {returnOrder.renewCount} 次</Tag>
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Form layout="vertical">
+              <Form.Item label="当前里程表读数（km，选填）">
+                <Input
+                  placeholder="请输入还车时车辆里程表显示的公里数"
+                  value={returnOdometer}
+                  onChange={(e) => setReturnOdometer(e.target.value)}
+                  prefix={<span style={{ color: '#999' }}>km</span>}
+                  size="large"
+                />
+                {returnOrder.pickupOdometer != null && returnOdometer.trim() && !isNaN(parseFloat(returnOdometer)) && parseFloat(returnOdometer) > returnOrder.pickupOdometer && (
+                  <div style={{ fontSize: '0.75rem', color: '#52c41a', marginTop: '4px' }}>
+                    本次行驶里程：{(parseFloat(returnOdometer) - returnOrder.pickupOdometer).toFixed(1)} km
+                  </div>
+                )}
+              </Form.Item>
+              <Form.Item label="还车备注（选填）">
+                <Input.TextArea
+                  placeholder="请记录还车时车辆状况，如油量、电量、新增划痕或损伤等"
+                  value={returnNote}
+                  onChange={(e) => setReturnNote(e.target.value)}
+                  rows={4}
+                  maxLength={500}
+                  showCount
+                  size="large"
+                />
+              </Form.Item>
+            </Form>
+
+            <div style={{ fontSize: '0.75rem', color: '#999', textAlign: 'center', marginTop: '12px' }}>
+              <CheckCircleOutlined style={{ marginRight: '4px', color: '#52c41a' }} />
+              点击"确认还车"即表示您已完成还车手续，订单将进入已完成状态
             </div>
           </div>
         )}

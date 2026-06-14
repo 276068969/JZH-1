@@ -25,6 +25,18 @@ public class Order {
 
     private Integer renewCount;
 
+    private LocalDateTime pickupTime;
+
+    private String pickupNote;
+
+    private BigDecimal pickupOdometer;
+
+    private LocalDateTime returnTime;
+
+    private String returnNote;
+
+    private BigDecimal returnOdometer;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

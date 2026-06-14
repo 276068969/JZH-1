@@ -114,8 +114,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException("订单不存在");
         }
 
-        if (!"pending".equals(order.getStatus()) && !"active".equals(order.getStatus())) {
-            throw new RuntimeException("仅待取车和使用中的订单可续租");
+        if (!"pending".equals(order.getStatus()) && !"active".equals(order.getStatus()) && !"picked_up".equals(order.getStatus())) {
+            throw new RuntimeException("仅待取车和已取车的订单可续租");
         }
 
         LocalDateTime newEnd = LocalDateTime.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
@@ -158,8 +158,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException("订单不存在");
         }
 
-        if (!"pending".equals(order.getStatus()) && !"active".equals(order.getStatus())) {
-            throw new RuntimeException("仅待取车和使用中的订单可续租");
+        if (!"pending".equals(order.getStatus()) && !"active".equals(order.getStatus()) && !"picked_up".equals(order.getStatus())) {
+            throw new RuntimeException("仅待取车和已取车的订单可续租");
         }
 
         LocalDateTime newEnd = LocalDateTime.parse(newEndDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
@@ -214,7 +214,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setUpdateTime(LocalDateTime.now());
         this.updateById(order);
 
-        if ("pending".equals(oldStatus) || "active".equals(oldStatus)) {
+        if ("pending".equals(oldStatus) || "active".equals(oldStatus) || "picked_up".equals(oldStatus)) {
             releaseVehicleIfNoActiveOrders(order.getVehicleId());
         }
 
@@ -227,7 +227,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (order == null) return;
         String currentStatus = order.getStatus();
 
-        if ("cancelled".equals(currentStatus) || "completed".equals(currentStatus)) {
+        if ("cancelled".equals(currentStatus) || "completed".equals(currentStatus) || "returned".equals(currentStatus)) {
             return;
         }
 
@@ -237,10 +237,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         String newStatus = currentStatus;
 
+        if ("picked_up".equals(currentStatus)) {
+            return;
+        }
+
         if (now.isBefore(start)) {
             newStatus = "pending";
         } else if (!now.isBefore(start) && !now.isAfter(end)) {
-            newStatus = "active";
+            newStatus = "pending";
         } else {
             newStatus = "completed";
         }
@@ -259,7 +263,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private void releaseVehicleIfNoActiveOrders(Long vehicleId) {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getVehicleId, vehicleId)
-               .in(Order::getStatus, Arrays.asList("pending", "active"));
+               .in(Order::getStatus, Arrays.asList("pending", "active", "picked_up"));
         List<Order> activeOrders = this.list(wrapper);
 
         if (activeOrders.isEmpty()) {
@@ -271,7 +275,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public void refreshAllPendingOrders() {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
-        wrapper.in(Order::getStatus, Arrays.asList("pending", "active"));
+        wrapper.in(Order::getStatus, Arrays.asList("pending", "active", "picked_up"));
         List<Order> pendingOrders = this.list(wrapper);
 
         if (pendingOrders == null || pendingOrders.isEmpty()) {
@@ -313,9 +317,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             }
 
             String status = order.getStatus();
-            if ("active".equals(status) || "pending".equals(status)) {
+            if ("active".equals(status) || "pending".equals(status) || "picked_up".equals(status)) {
                 activeCount++;
-            } else if ("completed".equals(status)) {
+            } else if ("completed".equals(status) || "returned".equals(status)) {
                 completedCount++;
             }
 
@@ -350,12 +354,76 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return overview;
     }
 
+    @Override
+    @Transactional
+    public Order confirmPickup(Long orderId, Long userId, String pickupNote, Double pickupOdometer) {
+        Order order = this.getById(orderId);
+        if (order == null) {
+            throw new RuntimeException("订单不存在");
+        }
+
+        if (!order.getUserId().equals(userId)) {
+            throw new RuntimeException("无权操作此订单");
+        }
+
+        if (!"pending".equals(order.getStatus()) && !"active".equals(order.getStatus())) {
+            throw new RuntimeException("当前订单状态不允许取车确认");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        order.setStatus("picked_up");
+        order.setPickupTime(now);
+        if (pickupNote != null && !pickupNote.trim().isEmpty()) {
+            order.setPickupNote(pickupNote.trim());
+        }
+        if (pickupOdometer != null) {
+            order.setPickupOdometer(BigDecimal.valueOf(pickupOdometer));
+        }
+        order.setUpdateTime(now);
+        this.updateById(order);
+
+        return order;
+    }
+
+    @Override
+    @Transactional
+    public Order confirmReturn(Long orderId, Long userId, String returnNote, Double returnOdometer) {
+        Order order = this.getById(orderId);
+        if (order == null) {
+            throw new RuntimeException("订单不存在");
+        }
+
+        if (!order.getUserId().equals(userId)) {
+            throw new RuntimeException("无权操作此订单");
+        }
+
+        if (!"picked_up".equals(order.getStatus()) && !"active".equals(order.getStatus())) {
+            throw new RuntimeException("当前订单状态不允许还车确认");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        order.setStatus("returned");
+        order.setReturnTime(now);
+        if (returnNote != null && !returnNote.trim().isEmpty()) {
+            order.setReturnNote(returnNote.trim());
+        }
+        if (returnOdometer != null) {
+            order.setReturnOdometer(BigDecimal.valueOf(returnOdometer));
+        }
+        order.setUpdateTime(now);
+        this.updateById(order);
+
+        releaseVehicleIfNoActiveOrders(order.getVehicleId());
+
+        return order;
+    }
+
     private boolean isVehicleAvailableForRenew(Long vehicleId, Long currentOrderId,
                                                LocalDateTime periodStart, LocalDateTime periodEnd) {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getVehicleId, vehicleId)
                .ne(Order::getId, currentOrderId)
-               .in(Order::getStatus, Arrays.asList("pending", "active"))
+               .in(Order::getStatus, Arrays.asList("pending", "active", "picked_up"))
                .and(w -> w.lt(Order::getStartDate, periodEnd)
                            .gt(Order::getEndDate, periodStart));
 
@@ -413,7 +481,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         o2.setStartDate(LocalDateTime.now().minusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0));
         o2.setEndDate(LocalDateTime.now().plusDays(4).withHour(18).withMinute(0).withSecond(0).withNano(0));
         o2.setTotalPrice(new BigDecimal("1995"));
-        o2.setStatus("active");
+        o2.setStatus("picked_up");
+        o2.setPickupTime(LocalDateTime.now().minusDays(1).withHour(10).withMinute(30).withSecond(0).withNano(0));
+        o2.setPickupNote("车辆外观良好，油量满格");
+        o2.setPickupOdometer(new BigDecimal("12580.5"));
         o2.setRenewCount(1);
         o2.setCreateTime(LocalDateTime.now().minusDays(3));
 
@@ -435,7 +506,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         o4.setStartDate(LocalDateTime.now().minusDays(20));
         o4.setEndDate(LocalDateTime.now().minusDays(15));
         o4.setTotalPrice(new BigDecimal("1495"));
-        o4.setStatus("completed");
+        o4.setStatus("returned");
+        o4.setPickupTime(LocalDateTime.now().minusDays(20).withHour(9).withMinute(0).withSecond(0).withNano(0));
+        o4.setPickupNote("车况良好");
+        o4.setPickupOdometer(new BigDecimal("10200.0"));
+        o4.setReturnTime(LocalDateTime.now().minusDays(15).withHour(17).withMinute(30).withSecond(0).withNano(0));
+        o4.setReturnNote("准时还车，车况良好，轻微划痕已备注");
+        o4.setReturnOdometer(new BigDecimal("10850.3"));
         o4.setRenewCount(2);
         o4.setCreateTime(LocalDateTime.now().minusDays(22));
 
