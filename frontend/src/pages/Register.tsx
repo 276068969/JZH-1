@@ -465,10 +465,14 @@ const Register: React.FC = () => {
             </div>
 
             <Alert
-              type="info"
+              type={submitStatus === 'error' ? 'warning' : 'info'}
               showIcon
               style={{ marginTop: -4 }}
-              message="资料完整度：驾驶证 + 身份证齐备后，即可直接在平台下单租车。"
+              message={
+                submitStatus === 'error'
+                  ? '当前提交存在校验错误，请修正上方标红字段后重新提交，实名资料通过后即可租车。'
+                  : '资料完整度：驾驶证 + 身份证齐备后，即可直接在平台下单租车。'
+              }
             />
           </>
         )}
@@ -601,10 +605,14 @@ const Register: React.FC = () => {
             </div>
 
             <Alert
-              type="info"
+              type={submitStatus === 'error' ? 'warning' : 'info'}
               showIcon
               style={{ marginTop: -4 }}
-              message="企业资质提交后，运营人员会在 1 个工作日内完成审核，审核通过即可开通企业用车通道。"
+              message={
+                submitStatus === 'error'
+                  ? '当前提交存在校验错误，请修正上方标红字段后重新提交，企业资质审核通过后即可开通用车通道。'
+                  : '企业资质提交后，运营人员会在 1 个工作日内完成审核，审核通过即可开通企业用车通道。'
+              }
             />
           </>
         )}
