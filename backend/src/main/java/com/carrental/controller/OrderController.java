@@ -36,9 +36,8 @@ public class OrderController {
             Long vehicleId = Long.valueOf(params.get("vehicleId").toString());
             String startDate = params.get("startDate").toString();
             String endDate = params.get("endDate").toString();
-            Double totalPrice = Double.valueOf(params.get("totalPrice").toString());
 
-            Order order = orderService.createOrder(userId, vehicleId, startDate, endDate, totalPrice);
+            Order order = orderService.createOrder(userId, vehicleId, startDate, endDate);
 
             Map<String, Object> response = new HashMap<>();
             response.put("code", 200);

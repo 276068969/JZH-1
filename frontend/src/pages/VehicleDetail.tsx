@@ -97,6 +97,8 @@ const VehicleDetail: React.FC = () => {
   const [recommendLoading, setRecommendLoading] = useState(true)
   const [recommendError, setRecommendError] = useState<string | null>(null)
   const [reRentInfo, setReRentInfo] = useState<ReRentState | null>(null)
+  const [priceResult, setPriceResult] = useState<any>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
   const [recentViewed, setRecentViewed] = useState<any[]>([])
   const [recentViewedLoading, setRecentViewedLoading] = useState(false)
 
@@ -232,11 +234,33 @@ const VehicleDetail: React.FC = () => {
     }
   }
 
-  const calculatePrice = () => {
-    if (!dates || !dates[0] || !dates[1]) return 0
-    const days = dates[1].diff(dates[0], 'day') + 1
-    return vehicle ? vehicle.price * days : 0
+  const fetchPriceCalculation = async () => {
+    if (!dates || !dates[0] || !dates[1] || !id) {
+      setPriceResult(null)
+      return
+    }
+    setPriceLoading(true)
+    try {
+      const response = await axios.post('/api/price/calculate', {
+        vehicleId: Number(id),
+        startDate: dates[0].format('YYYY-MM-DD'),
+        endDate: dates[1].format('YYYY-MM-DD')
+      })
+      if (response.data?.code === 200 && response.data?.data) {
+        setPriceResult(response.data.data)
+      } else {
+        setPriceResult(null)
+      }
+    } catch {
+      setPriceResult(null)
+    } finally {
+      setPriceLoading(false)
+    }
   }
+
+  useEffect(() => {
+    fetchPriceCalculation()
+  }, [dates, id])
 
   const handleRent = async () => {
     if (!dates || !dates[0] || !dates[1]) {
@@ -256,8 +280,7 @@ const VehicleDetail: React.FC = () => {
       const response = await axios.post('/api/orders', {
         vehicleId: id,
         startDate: dates[0].format('YYYY-MM-DD'),
-        endDate: dates[1].format('YYYY-MM-DD'),
-        totalPrice: calculatePrice()
+        endDate: dates[1].format('YYYY-MM-DD')
       })
       if (response.data?.code === 200) {
         message.success('订单提交成功！')
@@ -506,14 +529,46 @@ const VehicleDetail: React.FC = () => {
 
               {dates && dates[0] && dates[1] && (
                 <div style={{ marginBottom: '16px', padding: '12px', background: '#f8f9fa', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span>租用天数</span>
-                    <span>{dates[1].diff(dates[0], 'day') + 1} 天</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', fontWeight: 'bold' }}>
-                    <span>总计</span>
-                    <span style={{ color: '#ff4d4f' }}>¥{calculatePrice()}</span>
-                  </div>
+                  {priceLoading ? (
+                    <div style={{ textAlign: 'center', color: '#999', padding: '8px 0' }}>计算中...</div>
+                  ) : priceResult ? (
+                    <>
+                      {priceResult.feeItems && priceResult.feeItems.map((item: any, idx: number) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          marginBottom: idx < priceResult.feeItems.length - 1 ? '6px' : '0',
+                          fontSize: item.amount < 0 ? '0.875rem' : undefined,
+                          color: item.amount < 0 ? '#52c41a' : undefined
+                        }}>
+                          <span>{item.name}</span>
+                          <span>¥{Math.abs(item.amount).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '1.25rem',
+                        fontWeight: 'bold',
+                        marginTop: '8px',
+                        paddingTop: '8px',
+                        borderTop: '1px dashed #d9d9d9'
+                      }}>
+                        <span>总计</span>
+                        <span style={{ color: '#ff4d4f' }}>¥{priceResult.totalPrice}</span>
+                      </div>
+                      {priceResult.discounts && priceResult.discounts.length > 0 && (
+                        <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#999' }}>
+                          已优惠 ¥{priceResult.totalDiscount}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', fontWeight: 'bold' }}>
+                      <span>租用天数</span>
+                      <span>{dates[1].diff(dates[0], 'day') + 1} 天</span>
+                    </div>
+                  )}
                 </div>
               )}
 

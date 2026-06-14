@@ -30,7 +30,7 @@ public class SecurityConfig {
                 .and()
                 .csrf().disable()
                 .authorizeRequests()
-                .antMatchers("/api/auth/**", "/api/health", "/api/vehicles/**", "/api/orders/**", "/api/recommend/**", "/actuator/**").permitAll()
+                .antMatchers("/api/auth/**", "/api/health", "/api/vehicles/**", "/api/orders/**", "/api/recommend/**", "/api/price/**", "/actuator/**").permitAll()
                 .anyRequest().authenticated()
                 .and()
                 .sessionManagement()

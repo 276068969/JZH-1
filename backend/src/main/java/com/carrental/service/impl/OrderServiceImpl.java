@@ -8,6 +8,8 @@ import com.carrental.entity.Order;
 import com.carrental.entity.Vehicle;
 import com.carrental.mapper.OrderMapper;
 import com.carrental.service.OrderService;
+import com.carrental.service.PriceCalculationService;
+import com.carrental.service.UserService;
 import com.carrental.service.VehicleService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,20 +32,34 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Autowired
     private VehicleService vehicleService;
 
+    @Autowired
+    private PriceCalculationService priceCalculationService;
+
+    @Autowired
+    private UserService userService;
+
     @Override
     @Transactional
-    public Order createOrder(Long userId, Long vehicleId, String startDate, String endDate, Double totalPrice) {
+    public Order createOrder(Long userId, Long vehicleId, String startDate, String endDate) {
         Vehicle vehicle = vehicleService.getVehicleById(vehicleId);
         if (vehicle == null || !vehicle.getAvailable()) {
             throw new RuntimeException("车辆不可用");
         }
 
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        com.carrental.entity.User user = userService.getById(userId);
+        String userType = user != null ? user.getUserType() : "personal";
+
+        BigDecimal totalPrice = priceCalculationService.calculateTotalPrice(vehicleId, startDateTime, endDateTime, userType);
+
         Order order = new Order();
         order.setUserId(userId);
         order.setVehicleId(vehicleId);
-        order.setStartDate(LocalDateTime.parse(startDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-        order.setEndDate(LocalDateTime.parse(endDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-        order.setTotalPrice(BigDecimal.valueOf(totalPrice));
+        order.setStartDate(startDateTime);
+        order.setEndDate(endDateTime);
+        order.setTotalPrice(totalPrice);
         order.setStatus("pending");
         order.setRenewCount(0);
         order.setCreateTime(LocalDateTime.now());
@@ -127,9 +143,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         boolean available = isVehicleAvailableForRenew(order.getVehicleId(), orderId, currentEnd, newEnd);
 
+        com.carrental.entity.User user = userService.getById(order.getUserId());
+        String userType = user != null ? user.getUserType() : "personal";
+
         long additionalDays = java.time.temporal.ChronoUnit.DAYS.between(
                 currentEnd.toLocalDate(), newEnd.toLocalDate());
-        BigDecimal additionalPrice = vehicle.getPrice().multiply(BigDecimal.valueOf(additionalDays));
+        BigDecimal additionalPrice = priceCalculationService.calculateRenewPrice(
+                order.getVehicleId(), currentEnd, newEnd, userType);
         BigDecimal newTotalPrice = order.getTotalPrice().add(additionalPrice);
 
         Map<String, Object> result = new HashMap<>();
@@ -169,10 +189,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException("续租时段车辆已被预订，无法续租");
         }
 
-        Vehicle vehicle = vehicleService.getVehicleById(order.getVehicleId());
+        com.carrental.entity.User user = userService.getById(order.getUserId());
+        String userType = user != null ? user.getUserType() : "personal";
+
         long additionalDays = java.time.temporal.ChronoUnit.DAYS.between(
                 currentEnd.toLocalDate(), newEnd.toLocalDate());
-        BigDecimal additionalPrice = vehicle.getPrice().multiply(BigDecimal.valueOf(additionalDays));
+        BigDecimal additionalPrice = priceCalculationService.calculateRenewPrice(
+                order.getVehicleId(), currentEnd, newEnd, userType);
         BigDecimal newTotalPrice = order.getTotalPrice().add(additionalPrice);
 
         order.setEndDate(newEnd);
