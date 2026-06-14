@@ -36,7 +36,7 @@ mybatis-plus:
 
 jwt:
   secret: ${JWT_SECRET:carRentalPlatformSecretKey2026VeryLongAndSecureKeyForJwtHs512AlgorithmMinimum64Bytes}
-  expiration: ${JWT_EXPIRATION:86400000}
+  expiration: ${JWT_EXPIRATION:604800000}
 
 logging:
   level:

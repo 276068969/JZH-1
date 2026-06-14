@@ -64,9 +64,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                .orderByDesc(Order::getCreateTime);
 
         List<Order> orders = this.list(wrapper);
-        if (orders.isEmpty()) {
-            return getMockOrders(userId);
-        }
 
         for (Order order : orders) {
             refreshOrderStatus(order);
@@ -83,11 +80,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 .collect(Collectors.toList());
 
         List<Vehicle> vehicles = vehicleService.getVehiclesByIds(vehicleIds);
-        if (vehicles == null || vehicles.isEmpty()) {
-            vehicles = getMockVehicles();
-        }
-        Map<Long, Vehicle> vehicleMap = vehicles.stream()
-                .collect(Collectors.toMap(Vehicle::getId, v -> v));
+        Map<Long, Vehicle> vehicleMap = (vehicles != null && !vehicles.isEmpty())
+                ? vehicles.stream().collect(Collectors.toMap(Vehicle::getId, v -> v))
+                : new HashMap<>();
 
         List<OrderDTO> result = new ArrayList<>();
         for (Order order : orders) {
@@ -305,11 +300,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 .collect(Collectors.toList());
 
         List<Vehicle> vehicles = vehicleService.getVehiclesByIds(vehicleIds);
-        if (vehicles == null || vehicles.isEmpty()) {
-            vehicles = getMockVehicles();
-        }
-        Map<Long, Vehicle> vehicleMap = vehicles.stream()
-                .collect(Collectors.toMap(Vehicle::getId, v -> v));
+        Map<Long, Vehicle> vehicleMap = (vehicles != null && !vehicles.isEmpty())
+                ? vehicles.stream().collect(Collectors.toMap(Vehicle::getId, v -> v))
+                : new HashMap<>();
 
         for (Order order : orders) {
             if (!"cancelled".equals(order.getStatus())) {
