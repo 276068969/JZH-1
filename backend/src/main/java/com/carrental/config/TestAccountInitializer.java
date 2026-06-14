@@ -1,7 +1,6 @@
 package com.carrental.config;
 
 import com.carrental.entity.User;
-import com.carrental.entity.Order;
 import com.carrental.entity.Vehicle;
 import com.carrental.mapper.UserMapper;
 import com.carrental.mapper.OrderMapper;
@@ -17,6 +16,11 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+
+/**
+ * 注意：Spring 注解 @Order 与实体类 com.carrental.entity.Order 同名，
+ * 因此实体类必须使用完全限定名，不能 import 以避免编译冲突。
+ */
 
 @Component
 @Order(2)
@@ -187,7 +191,7 @@ public class TestAccountInitializer implements CommandLineRunner {
                 Vehicle v2 = vehicles.get(1 % vehicles.size());
                 Vehicle v3 = vehicles.get(2 % vehicles.size());
 
-                Order order1 = new Order();
+                com.carrental.entity.Order order1 = new com.carrental.entity.Order();
                 order1.setUserId(test.getId());
                 order1.setVehicleId(v1.getId());
                 order1.setStartDate(now.plusDays(2).withHour(9).withMinute(0).withSecond(0).withNano(0));
@@ -200,7 +204,7 @@ public class TestAccountInitializer implements CommandLineRunner {
                 order1.setUpdateTime(now.minusDays(1));
                 orderMapper.insert(order1);
 
-                Order order2 = new Order();
+                com.carrental.entity.Order order2 = new com.carrental.entity.Order();
                 order2.setUserId(test.getId());
                 order2.setVehicleId(v2.getId());
                 order2.setStartDate(now.minusDays(1).withHour(9).withMinute(0).withSecond(0).withNano(0));
@@ -216,7 +220,7 @@ public class TestAccountInitializer implements CommandLineRunner {
                 order2.setUpdateTime(now.minusDays(1));
                 orderMapper.insert(order2);
 
-                Order order3 = new Order();
+                com.carrental.entity.Order order3 = new com.carrental.entity.Order();
                 order3.setUserId(test.getId());
                 order3.setVehicleId(v3.getId());
                 order3.setStartDate(now.minusDays(10).withHour(9).withMinute(0).withSecond(0).withNano(0));
@@ -251,7 +255,7 @@ public class TestAccountInitializer implements CommandLineRunner {
                 Vehicle v5 = vehicles.get(4 % vehicles.size());
                 Vehicle v6 = vehicles.get(5 % vehicles.size());
 
-                Order order4 = new Order();
+                com.carrental.entity.Order order4 = new com.carrental.entity.Order();
                 order4.setUserId(admin.getId());
                 order4.setVehicleId(v4.getId());
                 order4.setStartDate(now.plusDays(1).withHour(8).withMinute(0).withSecond(0).withNano(0));
@@ -264,7 +268,7 @@ public class TestAccountInitializer implements CommandLineRunner {
                 order4.setUpdateTime(now.minusDays(2));
                 orderMapper.insert(order4);
 
-                Order order5 = new Order();
+                com.carrental.entity.Order order5 = new com.carrental.entity.Order();
                 order5.setUserId(admin.getId());
                 order5.setVehicleId(v5.getId());
                 order5.setStartDate(now.minusDays(3).withHour(10).withMinute(0).withSecond(0).withNano(0));
@@ -280,7 +284,7 @@ public class TestAccountInitializer implements CommandLineRunner {
                 order5.setUpdateTime(now.minusDays(3));
                 orderMapper.insert(order5);
 
-                Order order6 = new Order();
+                com.carrental.entity.Order order6 = new com.carrental.entity.Order();
                 order6.setUserId(admin.getId());
                 order6.setVehicleId(v6.getId());
                 order6.setStartDate(now.minusDays(20).withHour(9).withMinute(0).withSecond(0).withNano(0));
