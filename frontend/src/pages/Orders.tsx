@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Card, Table, Tag, Button, Modal, message, Tabs, Descriptions, Radio, DatePicker, Alert, Divider, Row, Col, Empty, Badge, Steps, Input, InputNumber, Form } from 'antd'
+import { Card, Table, Tag, Button, Modal, message, Tabs, Descriptions, Radio, DatePicker, Alert, Divider, Row, Col, Empty, Badge, Steps, Input, Form } from 'antd'
 import {
   EnvironmentOutlined,
   CalendarOutlined,
