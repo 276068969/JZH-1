@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Input, Select, Row, Col, Rate, Tag, Checkbox, Button, message, Slider, Collapse, Badge } from 'antd'
-import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined, FilterOutlined, UserOutlined, ThunderboltOutlined, CarOutlined, ReloadOutlined } from '@ant-design/icons'
+import { SearchOutlined, EnvironmentOutlined, SwapOutlined, CloseOutlined, FilterOutlined, UserOutlined, ThunderboltOutlined, CarOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons'
 import axios from 'axios'
+import { addViewHistory, getRecentViewedIds, reorderVehiclesByRecentView } from '../utils/viewHistory'
 
 const { Search } = Input
 const { Option } = Select
@@ -58,6 +59,7 @@ const VehicleList: React.FC = () => {
     types: [],
   })
   const [filterOptionsError, setFilterOptionsError] = useState<string | null>(null)
+  const [recentViewedIds, setRecentViewedIds] = useState<number[]>([])
 
   const searchText = searchParams.get('search') || ''
   const typeFilter = searchParams.get('type') || ''
@@ -76,8 +78,21 @@ const VehicleList: React.FC = () => {
   }, [])
 
   useEffect(() => {
+    loadRecentViewedIds()
+  }, [])
+
+  useEffect(() => {
     loadVehicles()
-  }, [searchParams])
+  }, [searchParams, recentViewedIds])
+
+  const loadRecentViewedIds = async () => {
+    try {
+      const ids = await getRecentViewedIds(50)
+      setRecentViewedIds(ids)
+    } catch (e) {
+      console.error('加载最近浏览ID失败', e)
+    }
+  }
 
   const loadFilterOptions = async () => {
     try {
@@ -119,7 +134,8 @@ const VehicleList: React.FC = () => {
       const response = await axios.get('/api/vehicles/search', { params })
       const data = response.data?.data || response.data
       if (Array.isArray(data)) {
-        setVehicles(data)
+        const reorderedVehicles = reorderVehiclesByRecentView(data, recentViewedIds)
+        setVehicles(reorderedVehicles)
       } else {
         throw new Error('接口返回格式错误：缺少 data 数组')
       }
@@ -132,6 +148,22 @@ const VehicleList: React.FC = () => {
       setLoading(false)
     }
   }
+
+  const handleVehicleClick = useCallback(async (vehicle: Vehicle) => {
+    try {
+      await addViewHistory({
+        id: vehicle.id,
+        name: vehicle.name,
+        type: vehicle.type,
+        price: vehicle.price,
+        location: vehicle.location,
+        available: vehicle.available,
+        rating: vehicle.rating
+      }, 'list')
+    } catch (e) {
+      console.error('记录浏览历史失败', e)
+    }
+  }, [])
 
   const vehicleTypes = useMemo(() => {
     if (filterOptions.types.length > 0) return filterOptions.types
@@ -639,8 +671,32 @@ const VehicleList: React.FC = () => {
                     {vehicle.available ? '可租' : '已租满'}
                   </Tag>
                 </div>
-                <Link to={`/vehicles/${vehicle.id}`} style={{ textDecoration: 'none', display: 'block' }}>
-                  <div className="vehicle-image" style={{ height: '180px' }}>🚗</div>
+                <Link
+                  to={`/vehicles/${vehicle.id}`}
+                  style={{ textDecoration: 'none', display: 'block' }}
+                  onClick={() => handleVehicleClick(vehicle)}
+                >
+                  <div className="vehicle-image" style={{ height: '180px', position: 'relative' }}>
+                    {recentViewedIds.includes(vehicle.id) && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '8px',
+                        left: '8px',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        zIndex: 5
+                      }}>
+                        <HistoryOutlined /> 最近看过
+                      </div>
+                    )}
+                    🚗
+                  </div>
                   <div className="vehicle-info">
                     <h3 style={{ fontSize: '1.125rem', marginBottom: '8px' }}>{vehicle.name}</h3>
                     <p style={{ color: '#666', fontSize: '0.875rem', marginBottom: '12px' }}>

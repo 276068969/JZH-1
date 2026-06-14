@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Input, Select, Button, Card, Row, Col, Statistic, Alert, Spin } from 'antd'
-import { SearchOutlined, CarOutlined, EnvironmentOutlined, SafetyOutlined, DollarOutlined, RightOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Input, Select, Button, Card, Row, Col, Statistic, Alert, Spin, Tag } from 'antd'
+import { SearchOutlined, CarOutlined, EnvironmentOutlined, SafetyOutlined, DollarOutlined, RightOutlined, LoginOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons'
 import axios from 'axios'
+import { addViewHistory, getRecentViewHistory } from '../utils/viewHistory'
 
 const { Search } = Input
 
@@ -37,10 +38,41 @@ const Home: React.FC = () => {
   const [recommendError, setRecommendError] = useState<string | null>(null)
   const [vehiclesLoading, setVehiclesLoading] = useState(true)
   const [recommendLoading, setRecommendLoading] = useState(true)
+  const [recentViewed, setRecentViewed] = useState<Vehicle[]>([])
+  const [recentViewedLoading, setRecentViewedLoading] = useState(false)
 
   useEffect(() => {
     loadVehicles()
     loadRecommendations()
+    loadRecentViewed()
+  }, [])
+
+  const loadRecentViewed = async () => {
+    setRecentViewedLoading(true)
+    try {
+      const history = await getRecentViewHistory(6)
+      setRecentViewed(history)
+    } catch (e) {
+      console.error('加载最近浏览失败', e)
+    } finally {
+      setRecentViewedLoading(false)
+    }
+  }
+
+  const handleVehicleClick = useCallback(async (vehicle: Vehicle) => {
+    try {
+      await addViewHistory({
+        id: vehicle.id,
+        name: vehicle.name,
+        type: vehicle.type,
+        price: vehicle.price,
+        location: vehicle.location,
+        available: vehicle.available,
+        rating: vehicle.rating
+      }, 'home')
+    } catch (e) {
+      console.error('记录浏览历史失败', e)
+    }
   }, [])
 
   const loadVehicles = async () => {
@@ -168,7 +200,12 @@ const Home: React.FC = () => {
     return (
       <div className="vehicle-grid">
         {recommendedVehicles.slice(0, 6).map(item => (
-          <Link to={`/vehicles/${item.vehicle.id}`} key={item.vehicle.id} style={{ textDecoration: 'none' }}>
+          <Link
+            to={`/vehicles/${item.vehicle.id}`}
+            key={item.vehicle.id}
+            style={{ textDecoration: 'none' }}
+            onClick={() => handleVehicleClick(item.vehicle)}
+          >
             <div className="vehicle-card">
               <div className="vehicle-image">🚗</div>
               <div className="vehicle-info">
@@ -371,6 +408,99 @@ const Home: React.FC = () => {
           ))}
         </Row>
       </div>
+
+      {recentViewed.length > 0 && (
+        <div style={{ background: 'white', padding: '32px', borderRadius: '12px', marginTop: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '2rem', margin: 0, color: '#333', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <HistoryOutlined style={{ color: '#667eea' }} />
+              最近浏览
+            </h2>
+            <Link
+              to="/vehicles"
+              style={{ color: '#667eea', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              查看全部 <RightOutlined style={{ fontSize: '0.75rem' }} />
+            </Link>
+          </div>
+          {recentViewedLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Spin size="large" tip="正在加载最近浏览..." />
+            </div>
+          ) : (
+            <div className="vehicle-grid">
+              {recentViewed.slice(0, 6).map(vehicle => (
+                <Link
+                  to={`/vehicles/${vehicle.id}`}
+                  key={vehicle.id}
+                  style={{ textDecoration: 'none' }}
+                  onClick={() => handleVehicleClick(vehicle)}
+                >
+                  <div className="vehicle-card" style={{ position: 'relative' }}>
+                    <div className="vehicle-image" style={{ position: 'relative' }}>
+                      <div style={{
+                        position: 'absolute',
+                        top: '8px',
+                        left: '8px',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        zIndex: 5
+                      }}>
+                        <HistoryOutlined /> 最近看过
+                      </div>
+                      🚗
+                    </div>
+                    <div className="vehicle-info">
+                      <h3>{vehicle.name}</h3>
+                      <div className="price">¥{vehicle.price}/天</div>
+                      <div className="tags">
+                        <span
+                          style={{
+                            background: '#e6f7ff',
+                            color: '#1890ff',
+                            padding: '4px 12px',
+                            borderRadius: '4px',
+                            fontSize: '0.875rem',
+                            cursor: 'pointer'
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            goToVehicleList(vehicle.type)
+                          }}
+                        >
+                          {vehicle.type}
+                        </span>
+                        <span style={{
+                          background: '#f6ffed',
+                          color: '#52c41a',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          fontSize: '0.875rem'
+                        }}>
+                          ⭐ {vehicle.rating}
+                        </span>
+                        {!vehicle.available && (
+                          <Tag color="default" style={{ marginTop: '4px' }}>已租满</Tag>
+                        )}
+                      </div>
+                      <p style={{ marginTop: '12px', color: '#666', fontSize: '0.875rem' }}>
+                        📍 {vehicle.location}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ background: 'white', padding: '32px', borderRadius: '12px', marginTop: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
